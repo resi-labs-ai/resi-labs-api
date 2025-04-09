@@ -1,0 +1,16 @@
+ version: '3.8'
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - PORT=8000
+      - S3_BUCKET=${S3_BUCKET}
+      - S3_REGION=${S3_REGION}
+    volumes:
+      - .:/app
+    restart: unless-stopped
