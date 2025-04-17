@@ -101,7 +101,7 @@ def check_rate_limit(key: str, daily_limit: int) -> Tuple[bool, Optional[str]]:
 
     return True, None
 
-def generate_folder_upload_policy(bucket: str, folder_prefix: str, expiry_hours: int = 24) -> Dict:
+def generate_folder_upload_policy(bucket: str, folder_prefix: str, expiry_hours: int = 3) -> Dict:
     """Generate a POST policy for uploading multiple files to a folder"""
     # Calculate expiration time
     expiration = datetime.utcnow() + timedelta(hours=expiry_hours)
