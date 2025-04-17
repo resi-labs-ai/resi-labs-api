@@ -23,7 +23,9 @@ from s3_storage_api.utils.bt_utils import verify_commitment
 # Configuration
 S3_BUCKET = os.getenv('S3_BUCKET', 'data-universe-storage')
 S3_REGION = os.getenv('S3_REGION', 'us-east-1')
-SERVER_PORT = int(os.getenv('PORT', '8000'))
+AWS_ACCESS_KEY = os.getenv("DO_SPACES_KEY", "your-access-key-here")
+AWS_SECRET_KEY = os.getenv("DO_SPACES_SECRET", "your-secret-key-here")
+SERVER_PORT = int(os.getenv('PORT', '8501'))
 COMMITMENT_VALIDITY_SECONDS = 60  # 1 minute window for authentication
 
 # Rate limiting configuration
@@ -126,8 +128,11 @@ def generate_folder_upload_policy(bucket: str, folder_prefix: str, expiry_hours:
     }
 
     # Get AWS credentials
-    credentials = s3_client.meta.config.credentials
-
+    credentials = {
+    'access_key': AWS_ACCESS_KEY,
+    'secret_key': AWS_SECRET_KEY
+    }
+    
     # Convert policy to base64
     policy_json = json.dumps(policy).encode('utf-8')
     policy_base64 = base64.b64encode(policy_json).decode('utf-8')
@@ -159,7 +164,7 @@ def generate_folder_upload_policy(bucket: str, folder_prefix: str, expiry_hours:
         "fields": {
             "acl": "private",
             "policy": policy_base64,
-            "AWSAccessKeyId": credentials.access_key,
+            "AWSAccessKeyId": credentials['access_key',
             "signature": signature,
             "x-amz-storage-class": "STANDARD"
         },
@@ -426,4 +431,4 @@ async def commitment_formats():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("server:app", host="0.0.0.0", port=SERVER_PORT, reload=True)
+    uvicorn.run("server:app", host="0.0.0.0", port=8501, reload=True)
