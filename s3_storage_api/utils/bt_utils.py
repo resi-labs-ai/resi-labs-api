@@ -15,7 +15,7 @@ def get_subtensor(network="finney"):
         return None
 
 
-def get_commitment(hotkey: str, netuid: int, network: str) -> Optional[str]:
+def get_commitment(hotkey: str, netuid: int, network='finney') -> Optional[str]:
     """Get the latest commitment from the blockchain"""
     subtensor = get_subtensor(network)
     if not subtensor:
@@ -81,6 +81,7 @@ def verify_commitment(
         bool: True if commitment is valid and recent
     """
     # Get commitment from chain
+
     commitment = get_commitment(hotkey, netuid, network)
     if not commitment:
         return False
