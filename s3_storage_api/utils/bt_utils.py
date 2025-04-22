@@ -4,6 +4,42 @@ Bittensor utility functions for blockchain commitment verification
 import time
 import bittensor as bt
 from typing import Optional
+from bittensor import Keypair
+
+
+
+def is_hotkey_registered(hotkey: str, netuid: int, network: str) -> bool:
+    """
+    Check if a hotkey is registered in the metagraph for a given subnet.
+    """
+    subtensor = get_subtensor(network)
+    if not subtensor:
+        return False
+    try:
+        metagraph = subtensor.metagraph(netuid=netuid)
+        return hotkey in metagraph.hotkeys
+    except Exception as e:
+        print(f"Error checking hotkey registration: {str(e)}")
+        return False
+
+
+def verify_signature(message: str, signature_hex: str, hotkey_ss58: str, netuid: int, network: str) -> bool:
+    """
+    Verify that the message was signed by the hotkey.
+    Also ensures the hotkey is registered in the metagraph.
+    """
+    try:
+        if not is_hotkey_registered(hotkey_ss58, netuid, network):
+            print(f"Hotkey {hotkey_ss58} is not registered in subnet {netuid}")
+            return False
+
+        kp = Keypair(ss58_address=hotkey_ss58)
+        signature = bytes.fromhex(signature_hex)
+        return kp.verify(message.encode(), signature)
+    except Exception as e:
+        print(f"Signature verification error: {e}")
+        return False
+
 
 
 def get_subtensor(network="finney"):

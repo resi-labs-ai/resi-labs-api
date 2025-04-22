@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 
 from s3_storage_api.utils.redis_utils import RedisClient
-from s3_storage_api.utils.bt_utils import verify_commitment
+from s3_storage_api.utils.bt_utils import verify_commitment, verify_signature
 
 load_dotenv()
 
@@ -22,6 +22,8 @@ S3_REGION = os.getenv('S3_REGION', 'nyc3')
 AWS_ACCESS_KEY = os.getenv("DO_SPACES_KEY", "your-access-key-here")
 AWS_SECRET_KEY = os.getenv("DO_SPACES_SECRET", "your-secret-key-here")
 SERVER_PORT = int(os.getenv('PORT', '8501'))
+BT_NETWORK = os.getenv("BT_NETWORK", "finney")  # fallback to 'finney' if not set
+NET_UID = int(os.getenv('NET_UID', '13'))
 COMMITMENT_VALIDITY_SECONDS = 60
 
 
@@ -57,17 +59,17 @@ class MinerFolderAccessRequest(BaseModel):
     coldkey: str
     hotkey: str
     source: str = "x"
-    netuid: int = 13
-    network: str = "finney"
     timestamp: int = Field(default_factory=lambda: int(time.time()))
+    signature: str  # HEX string
     expiry: Optional[int] = None
+
+
 
 class ValidatorAccessRequest(BaseModel):
     validator_hotkey: str
-    netuid: int = 13
-    network: str = "finney"
     timestamp: int = Field(default_factory=lambda: int(time.time()))
     expiry: Optional[int] = None
+
 
 def check_rate_limit(key: str, daily_limit: int) -> Tuple[bool, Optional[str]]:
     today = time.strftime('%Y-%m-%d')
@@ -144,8 +146,9 @@ def generate_validator_access_urls(validator_hotkey: str, expiry_hours: int = 24
 async def get_folder_access(request: MinerFolderAccessRequest):
     try:
         coldkey, hotkey, source = request.coldkey, request.hotkey, request.source
-        timestamp, netuid, network = request.timestamp, request.netuid, request.network
+        timestamp = request.timestamp
         expiry = request.expiry or (timestamp + 86400)
+        signature = request.signature
         folder_path = f"data/{source}/{coldkey}/"
 
         is_allowed, msg = check_rate_limit(hotkey, DAILY_LIMIT_PER_MINER)
@@ -156,17 +159,17 @@ async def get_folder_access(request: MinerFolderAccessRequest):
         if now > expiry or now - timestamp > 300 or timestamp > now + 60:
             raise HTTPException(status_code=400, detail="Invalid timestamp")
 
+        # Verify hotkey signature (no on-chain commitment needed)
         commitment = f"s3:access:{coldkey}:{source}:{timestamp}"
-        if not verify_commitment(hotkey, commitment, netuid, network, COMMITMENT_VALIDITY_SECONDS):
-            raise HTTPException(status_code=401, detail="Invalid commitment")
+        if  not verify_signature(commitment, signature, hotkey, NET_UID, BT_NETWORK):
+            raise HTTPException(status_code=401, detail="Invalid signature")
 
         policy = generate_folder_upload_policy(S3_BUCKET, folder_path, expiry_hours=24)
         list_url = s3_client.generate_presigned_url(
             'list_objects_v2',
             Params={'Bucket': S3_BUCKET, 'Prefix': folder_path},
-            ExpiresIn=60 * 60 * 3
+            ExpiresIn=60 * 60 * 3 # three hours
         )
-        # Flatten the policy object directly into the return structure
         return {
             'folder': folder_path,
             'url': policy['url'],
@@ -175,17 +178,17 @@ async def get_folder_access(request: MinerFolderAccessRequest):
             'list_url': list_url
         }
 
-
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
+
 @app.post("/get-validator-access")
 async def get_validator_access(request: ValidatorAccessRequest):
     try:
-        hotkey, timestamp, netuid, network = request.validator_hotkey, request.timestamp, request.netuid, request.network
+        hotkey, timestamp = request.validator_hotkey, request.timestamp
         expiry = request.expiry or (timestamp + 86400)
 
         is_allowed, msg = check_rate_limit(hotkey, DAILY_LIMIT_PER_VALIDATOR)
@@ -197,7 +200,7 @@ async def get_validator_access(request: ValidatorAccessRequest):
             raise HTTPException(status_code=400, detail="Invalid timestamp")
 
         commitment = f"s3:validator:access:{timestamp}"
-        if not verify_commitment(hotkey, commitment, netuid, network, COMMITMENT_VALIDITY_SECONDS):
+        if not verify_commitment(hotkey, commitment, NET_UID, BT_NETWORK, COMMITMENT_VALIDITY_SECONDS):
             raise HTTPException(status_code=401, detail="Invalid commitment")
 
         return generate_validator_access_urls(hotkey, expiry_hours=24)
