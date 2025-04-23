@@ -32,7 +32,8 @@ def verify_signature(message: str, signature_hex: str, hotkey_ss58: str, netuid:
         if not is_hotkey_registered(hotkey_ss58, netuid, network):
             print(f"Hotkey {hotkey_ss58} is not registered in subnet {netuid}")
             return False
-
+        
+        
         kp = Keypair(ss58_address=hotkey_ss58)
         signature = bytes.fromhex(signature_hex)
         return kp.verify(message.encode(), signature)
@@ -86,11 +87,12 @@ def verify_validator_status(hotkey: str, netuid: int, network: str) -> bool:
 
         # Get metagraph to check validator permit
         metagraph = subtensor.metagraph(netuid=netuid)
-        if uid >= len(metagraph.validator_permit):
-            return False
-
-        # Check if hotkey has validator permit
-        return bool(metagraph.validator_permit[uid])
+        validator_permit = bool(metagraph.validator_permit[uid])
+        stake = int(metagraph.alpha_stake[uid]) > 40_000
+        if validator_permit and stake:
+            return True
+        
+        return False
     except Exception as e:
         print(f"Error verifying validator status: {str(e)}")
         return False

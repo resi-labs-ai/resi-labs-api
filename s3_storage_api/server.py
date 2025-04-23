@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 
 from s3_storage_api.utils.redis_utils import RedisClient
-from s3_storage_api.utils.bt_utils import verify_commitment, verify_signature
+from s3_storage_api.utils.bt_utils import verify_signature, verify_validator_status
 
 load_dotenv()
 
@@ -66,7 +66,8 @@ class MinerFolderAccessRequest(BaseModel):
 
 
 class ValidatorAccessRequest(BaseModel):
-    validator_hotkey: str
+    hotkey: str
+    signature: str  # HEX string
     timestamp: int = Field(default_factory=lambda: int(time.time()))
     expiry: Optional[int] = None
 
@@ -84,6 +85,7 @@ def check_rate_limit(key: str, daily_limit: int) -> Tuple[bool, Optional[str]]:
     redis_client.increment_counter(entity_key)
     redis_client.increment_counter(global_key)
     return True, None
+
 
 def generate_folder_upload_policy(bucket: str, folder_prefix: str, expiry_hours: int = 3) -> Dict:
     fields = {
@@ -142,6 +144,7 @@ def generate_validator_access_urls(validator_hotkey: str, expiry_hours: int = 24
         'urls': urls
     }
 
+
 @app.post("/get-folder-access")
 async def get_folder_access(request: MinerFolderAccessRequest):
     try:
@@ -161,7 +164,7 @@ async def get_folder_access(request: MinerFolderAccessRequest):
 
         # Verify hotkey signature (no on-chain commitment needed)
         commitment = f"s3:access:{coldkey}:{source}:{timestamp}"
-        if  not verify_signature(commitment, signature, hotkey, NET_UID, BT_NETWORK):
+        if not verify_signature(commitment, signature, hotkey, NET_UID, BT_NETWORK):
             raise HTTPException(status_code=401, detail="Invalid signature")
 
         policy = generate_folder_upload_policy(S3_BUCKET, folder_path, expiry_hours=24)
@@ -188,7 +191,8 @@ async def get_folder_access(request: MinerFolderAccessRequest):
 @app.post("/get-validator-access")
 async def get_validator_access(request: ValidatorAccessRequest):
     try:
-        hotkey, timestamp = request.validator_hotkey, request.timestamp
+        hotkey, timestamp = request.hotkey, request.timestamp
+        signature = request.signature
         expiry = request.expiry or (timestamp + 86400)
 
         is_allowed, msg = check_rate_limit(hotkey, DAILY_LIMIT_PER_VALIDATOR)
@@ -200,8 +204,14 @@ async def get_validator_access(request: ValidatorAccessRequest):
             raise HTTPException(status_code=400, detail="Invalid timestamp")
 
         commitment = f"s3:validator:access:{timestamp}"
-        if not verify_commitment(hotkey, commitment, NET_UID, BT_NETWORK, COMMITMENT_VALIDITY_SECONDS):
-            raise HTTPException(status_code=401, detail="Invalid commitment")
+
+        if not verify_validator_status(hotkey=hotkey, netuid=NET_UID, network=BT_NETWORK):
+            raise HTTPException(status_code=401, detail="You are not validator")
+        
+
+        if not verify_signature(commitment, signature, hotkey, NET_UID, BT_NETWORK):
+            raise HTTPException(status_code=401, detail="Invalid signature")
+        
 
         return generate_validator_access_urls(hotkey, expiry_hours=24)
 
