@@ -26,7 +26,6 @@ BT_NETWORK = os.getenv("BT_NETWORK", "finney")  # fallback to 'finney' if not se
 NET_UID = int(os.getenv('NET_UID', '13'))
 COMMITMENT_VALIDITY_SECONDS = 60
 
-
 DAILY_LIMIT_PER_MINER = 20
 DAILY_LIMIT_PER_VALIDATOR = 30
 TOTAL_DAILY_LIMIT = 2000
@@ -58,12 +57,9 @@ s3_client = boto3.client(
 class MinerFolderAccessRequest(BaseModel):
     coldkey: str
     hotkey: str
-    source: str = "x"
     timestamp: int = Field(default_factory=lambda: int(time.time()))
     signature: str  # HEX string
     expiry: Optional[int] = None
-
-
 
 class ValidatorAccessRequest(BaseModel):
     hotkey: str
@@ -88,9 +84,10 @@ def check_rate_limit(key: str, daily_limit: int) -> Tuple[bool, Optional[str]]:
 
 
 def generate_folder_upload_policy(bucket: str, folder_prefix: str, expiry_hours: int = 3) -> Dict:
+    """Generate upload policy for job-based folder structure"""
     fields = {
         "acl": "private",
-        "x-amz-storage-class": "STANDARD"  # ← ADD THIS
+        "x-amz-storage-class": "STANDARD"
     }
 
     conditions = [
@@ -112,28 +109,25 @@ def generate_folder_upload_policy(bucket: str, folder_prefix: str, expiry_hours:
     return post
 
 
-
 def generate_validator_access_urls(validator_hotkey: str, expiry_hours: int = 24) -> Dict:
+    """Generate validator access URLs for job-based structure"""
     expiration = datetime.utcnow() + timedelta(hours=expiry_hours)
     expiry_seconds = expiry_hours * 3600
-    urls = {'global': {}, 'sources': {}, 'miners': {}}
+    urls = {'global': {}, 'miners': {}}
 
+    # Global listing - all data
     urls['global']['list_all_data'] = s3_client.generate_presigned_url(
         'list_objects_v2',
         Params={'Bucket': S3_BUCKET, 'Prefix': 'data/', 'Delimiter': '/'},
         ExpiresIn=expiry_seconds
     )
 
-    for source in ['x', 'reddit']:
-        source_prefix = f'data/{source}/'
-        urls['sources'][source] = {
-            'list_miners': s3_client.generate_presigned_url(
-                'list_objects_v2',
-                Params={'Bucket': S3_BUCKET, 'Prefix': source_prefix, 'Delimiter': '/'},
-                ExpiresIn=expiry_seconds
-            ),
-            'prefix': source_prefix
-        }
+    # List all miners (hotkeys)
+    urls['miners']['list_all_miners'] = s3_client.generate_presigned_url(
+        'list_objects_v2',
+        Params={'Bucket': S3_BUCKET, 'Prefix': 'data/', 'Delimiter': '/'},
+        ExpiresIn=expiry_seconds
+    )
 
     return {
         'bucket': S3_BUCKET,
@@ -141,18 +135,24 @@ def generate_validator_access_urls(validator_hotkey: str, expiry_hours: int = 24
         'validator_hotkey': validator_hotkey,
         'expiry': expiration.isoformat(),
         'expiry_seconds': expiry_seconds,
-        'urls': urls
+        'urls': urls,
+        'structure_info': {
+            'folder_structure': 'data/hotkey/job_id/',
+            'description': 'Job-based folder structure without source separation'
+        }
     }
 
 
 @app.post("/get-folder-access")
 async def get_folder_access(request: MinerFolderAccessRequest):
     try:
-        coldkey, hotkey, source = request.coldkey, request.hotkey, request.source
+        coldkey, hotkey = request.coldkey, request.hotkey
         timestamp = request.timestamp
         expiry = request.expiry or (timestamp + 86400)
         signature = request.signature
-        folder_path = f"data/{source}/{coldkey}/"
+        
+        # Updated folder path - no source, just data/hotkey/
+        folder_path = f"data/{hotkey}/"
 
         is_allowed, msg = check_rate_limit(hotkey, DAILY_LIMIT_PER_MINER)
         if not is_allowed:
@@ -162,8 +162,8 @@ async def get_folder_access(request: MinerFolderAccessRequest):
         if now > expiry or now - timestamp > 300 or timestamp > now + 60:
             raise HTTPException(status_code=400, detail="Invalid timestamp")
 
-        # Verify hotkey signature (no on-chain commitment needed)
-        commitment = f"s3:access:{coldkey}:{source}:{timestamp}"
+        # Updated signature verification - use generic "data" instead of source
+        commitment = f"s3:data:access:{coldkey}:{hotkey}:{timestamp}"
         if not verify_signature(commitment, signature, hotkey, NET_UID, BT_NETWORK):
             raise HTTPException(status_code=401, detail="Invalid signature")
 
@@ -171,21 +171,25 @@ async def get_folder_access(request: MinerFolderAccessRequest):
         list_url = s3_client.generate_presigned_url(
             'list_objects_v2',
             Params={'Bucket': S3_BUCKET, 'Prefix': folder_path},
-            ExpiresIn=60 * 60 * 3 # three hours
+            ExpiresIn=60 * 60 * 3  # three hours
         )
+        
         return {
             'folder': folder_path,
             'url': policy['url'],
             'fields': policy['fields'],
             'expiry': datetime.fromtimestamp(expiry).isoformat(),
-            'list_url': list_url
+            'list_url': list_url,
+            'structure_info': {
+                'folder_structure': 'data/hotkey/job_id/',
+                'description': 'Upload files to job_id folders within your hotkey directory'
+            }
         }
 
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
 
 
 @app.post("/get-validator-access")
@@ -207,11 +211,9 @@ async def get_validator_access(request: ValidatorAccessRequest):
 
         if not verify_validator_status(hotkey=hotkey, netuid=NET_UID, network=BT_NETWORK):
             raise HTTPException(status_code=401, detail="You are not validator")
-        
 
         if not verify_signature(commitment, signature, hotkey, NET_UID, BT_NETWORK):
             raise HTTPException(status_code=401, detail="Invalid signature")
-        
 
         return generate_validator_access_urls(hotkey, expiry_hours=24)
 
@@ -220,19 +222,66 @@ async def get_validator_access(request: ValidatorAccessRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.get("/healthcheck")
 async def health_check():
-    return {'status': 'ok', 'timestamp': time.time(), 'bucket': S3_BUCKET, 'region': S3_REGION}
+    return {
+        'status': 'ok', 
+        'timestamp': time.time(), 
+        'bucket': S3_BUCKET, 
+        'region': S3_REGION,
+        'folder_structure': 'data/hotkey/job_id/'
+    }
+
 
 @app.get("/commitment-formats")
 async def commitment_formats():
     return {
-        'miner_format': "s3:access:{coldkey}:{source}:{timestamp}",
+        'miner_format': "s3:data:access:{coldkey}:{hotkey}:{timestamp}",
         'validator_format': "s3:validator:access:{timestamp}",
-        'example_miner': "s3:access:5F3...:x:1682345678",
+        'example_miner': "s3:data:access:5F3...coldkey:5H2...hotkey:1682345678",
         'example_validator': "s3:validator:access:1682345678",
-        'instructions': "1. Generate timestamp\n2. Commit to chain\n3. Make API request"
+        'folder_structure': {
+            'new_structure': 'data/hotkey/job_id/',
+            'description': 'Job-based folder structure without source separation',
+            'example_paths': [
+                'data/5F3...xyz/default_0/data_20250620_143052_150.parquet',
+                'data/5F3...xyz/crawler-7-h4rptebsja6qbdmocrt98/data_20250620_143055_67.parquet'
+            ]
+        },
+        'instructions': "1. Generate timestamp\n2. Sign commitment\n3. Make API request\n4. Upload to job_id folders"
     }
+
+
+@app.get("/structure-info")
+async def structure_info():
+    """Endpoint to get information about the new folder structure"""
+    return {
+        'folder_structure': 'data/hotkey/job_id/',
+        'changes': {
+            'old_structure': 'data/source/coldkey/label_keyword/YYYY-MM-DD/',
+            'new_structure': 'data/hotkey/job_id/',
+            'benefits': [
+                'Simpler structure with unique job IDs',
+                'No source separation needed',
+                'No date partitioning',
+                'Direct access by job ID'
+            ]
+        },
+        'example_job_ids': [
+            'default_0',
+            'default_10', 
+            'crawler-7-h4rptebsja6qbdmocrt98',
+            'crawler-0-multicrawler-8oImuOMLAVNkfZgKHdMlw'
+        ],
+        'upload_flow': [
+            '1. Get job IDs from Gravity',
+            '2. Request S3 credentials via API',
+            '3. Upload files to data/hotkey/job_id/ folders',
+            '4. Each job gets its own folder'
+        ]
+    }
+
 
 if __name__ == "__main__":
     import uvicorn
