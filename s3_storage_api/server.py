@@ -118,14 +118,14 @@ def generate_validator_access_urls(validator_hotkey: str, expiry_hours: int = 24
     # Global listing - all data
     urls['global']['list_all_data'] = s3_client.generate_presigned_url(
         'list_objects_v2',
-        Params={'Bucket': S3_BUCKET, 'Prefix': 'data/', 'Delimiter': '/'},
+        Params={'Bucket': S3_BUCKET, 'Prefix': 'hotkey=', 'Delimiter': '/'},
         ExpiresIn=expiry_seconds
     )
 
     # List all miners (hotkeys)
     urls['miners']['list_all_miners'] = s3_client.generate_presigned_url(
         'list_objects_v2',
-        Params={'Bucket': S3_BUCKET, 'Prefix': 'data/', 'Delimiter': '/'},
+        Params={'Bucket': S3_BUCKET, 'Prefix': 'hotkey=', 'Delimiter': '/'},
         ExpiresIn=expiry_seconds
     )
 
@@ -137,8 +137,8 @@ def generate_validator_access_urls(validator_hotkey: str, expiry_hours: int = 24
         'expiry_seconds': expiry_seconds,
         'urls': urls,
         'structure_info': {
-            'folder_structure': 'data/hotkey/job_id/',
-            'description': 'Job-based folder structure without source separation'
+            'folder_structure': 'hotkey={hotkey_id}/job_id={job_id}/',
+            'description': 'Job-based folder structure with explicit hotkey and job_id labels'
         }
     }
 
@@ -151,8 +151,8 @@ async def get_folder_access(request: MinerFolderAccessRequest):
         expiry = request.expiry or (timestamp + 86400)
         signature = request.signature
         
-        # Updated folder path - no source, just data/hotkey/
-        folder_path = f"data/{hotkey}/"
+        # Updated folder path - new format: hotkey={hotkey_id}/
+        folder_path = f"hotkey={hotkey}/"
 
         is_allowed, msg = check_rate_limit(hotkey, DAILY_LIMIT_PER_MINER)
         if not is_allowed:
@@ -181,7 +181,7 @@ async def get_folder_access(request: MinerFolderAccessRequest):
             'expiry': datetime.fromtimestamp(expiry).isoformat(),
             'list_url': list_url,
             'structure_info': {
-                'folder_structure': 'data/hotkey/job_id/',
+                'folder_structure': 'hotkey={hotkey_id}/job_id={job_id}/',
                 'description': 'Upload files to job_id folders within your hotkey directory'
             }
         }
@@ -230,7 +230,7 @@ async def health_check():
         'timestamp': time.time(), 
         'bucket': S3_BUCKET, 
         'region': S3_REGION,
-        'folder_structure': 'data/hotkey/job_id/'
+        'folder_structure': 'hotkey={hotkey_id}/job_id={job_id}/'
     }
 
 
@@ -242,14 +242,14 @@ async def commitment_formats():
         'example_miner': "s3:data:access:5F3...coldkey:5H2...hotkey:1682345678",
         'example_validator': "s3:validator:access:1682345678",
         'folder_structure': {
-            'new_structure': 'data/hotkey/job_id/',
-            'description': 'Job-based folder structure without source separation',
+            'new_structure': 'hotkey={hotkey_id}/job_id={job_id}/',
+            'description': 'Job-based folder structure with explicit labels',
             'example_paths': [
-                'data/5F3...xyz/default_0/data_20250620_143052_150.parquet',
-                'data/5F3...xyz/crawler-7-h4rptebsja6qbdmocrt98/data_20250620_143055_67.parquet'
+                'hotkey=5F3...xyz/job_id=default_0/data_20250620_143052_150.parquet',
+                'hotkey=5F3...xyz/job_id=crawler-7-h4rptebsja6qbdmocrt98/data_20250620_143055_67.parquet'
             ]
         },
-        'instructions': "1. Generate timestamp\n2. Sign commitment\n3. Make API request\n4. Upload to job_id folders"
+        'instructions': "1. Generate timestamp\n2. Sign commitment\n3. Make API request\n4. Upload to job_id folders with explicit labels"
     }
 
 
@@ -257,28 +257,25 @@ async def commitment_formats():
 async def structure_info():
     """Endpoint to get information about the new folder structure"""
     return {
-        'folder_structure': 'data/hotkey/job_id/',
+        'folder_structure': 'hotkey={hotkey_id}/job_id={job_id}/',
         'changes': {
-            'old_structure': 'data/source/coldkey/label_keyword/YYYY-MM-DD/',
-            'new_structure': 'data/hotkey/job_id/',
+            'old_structure': 'data/hotkey/job_id/',
+            'new_structure': 'hotkey={hotkey_id}/job_id={job_id}/',
             'benefits': [
-                'Simpler structure with unique job IDs',
-                'No source separation needed',
-                'No date partitioning',
-                'Direct access by job ID'
+                'Explicit hotkey and job_id labeling',
+                'Cleaner path structure',
+                'Better organization for miners'
             ]
         },
-        'example_job_ids': [
-            'default_0',
-            'default_10', 
-            'crawler-7-h4rptebsja6qbdmocrt98',
-            'crawler-0-multicrawler-8oImuOMLAVNkfZgKHdMlw'
+        'example_paths': [
+            'hotkey=5F3...xyz/job_id=default_0/data_20250620_143052_150.parquet',
+            'hotkey=5F3...xyz/job_id=crawler-7-h4rptebsja6qbdmocrt98/data_20250620_143055_67.parquet'
         ],
         'upload_flow': [
             '1. Get job IDs from Gravity',
             '2. Request S3 credentials via API',
-            '3. Upload files to data/hotkey/job_id/ folders',
-            '4. Each job gets its own folder'
+            '3. Upload files to hotkey={hotkey_id}/job_id={job_id}/ folders',
+            '4. Each job gets its own folder with explicit labels'
         ]
     }
 
