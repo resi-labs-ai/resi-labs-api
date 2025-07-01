@@ -155,7 +155,7 @@ def generate_validator_access_urls(validator_hotkey: str, expiry_hours: int = 24
     # Global listing - all data (with data/ prefix)
     urls['global']['list_all_data'] = s3_client.generate_presigned_url(
         'list_objects_v2',
-        Params={'Bucket': S3_BUCKET, 'Prefix': 'data/hotkey=', 'Delimiter': '/'},
+        Params={'Bucket': S3_BUCKET, 'Prefix': 'data/hotkey='},
         ExpiresIn=expiry_seconds
     )
 
