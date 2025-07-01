@@ -152,7 +152,7 @@ async def get_folder_access(request: MinerFolderAccessRequest):
         signature = request.signature
         
         # Updated folder path - new format: hotkey={hotkey_id}/
-        folder_path = f"hotkey={hotkey}/"
+        folder_path = f"data/hotkey={hotkey}/"
 
         is_allowed, msg = check_rate_limit(hotkey, DAILY_LIMIT_PER_MINER)
         if not is_allowed:
