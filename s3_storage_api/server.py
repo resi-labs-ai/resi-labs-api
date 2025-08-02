@@ -15,6 +15,12 @@ from dotenv import load_dotenv
 
 from s3_storage_api.utils.redis_utils import RedisClient
 from s3_storage_api.utils.bt_utils import verify_signature, verify_validator_status
+from s3_storage_api.utils.metagraph_syncer import MetagraphSyncer
+from s3_storage_api.utils.bt_utils_cached import (
+    verify_signature_cached,
+    verify_validator_status_cached
+)
+import bittensor as bt
 
 load_dotenv()
 
@@ -37,6 +43,9 @@ VALIDATOR_VERIFICATION_TIMEOUT = 120  # 2 minutes
 SIGNATURE_VERIFICATION_TIMEOUT = 60  # 1 minute
 S3_OPERATION_TIMEOUT = 60  # 1 minute
 
+# Metagraph sync configuration
+METAGRAPH_SYNC_INTERVAL = 300  # 5 minutes
+
 # Simple logging setup
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -56,6 +65,20 @@ app.add_middleware(
 )
 
 redis_client = RedisClient()
+
+# Initialize MetagraphSyncer for cached blockchain queries
+logger.info("Initializing MetagraphSyncer...")
+try:
+    subtensor = bt.subtensor(network=BT_NETWORK)
+    metagraph_syncer = MetagraphSyncer(subtensor, config={NET_UID: METAGRAPH_SYNC_INTERVAL})
+    metagraph_syncer.do_initial_sync()
+    metagraph_syncer.start()
+    logger.info(f"MetagraphSyncer initialized successfully for netuid {NET_UID}")
+except Exception as e:
+    logger.error(f"Failed to initialize MetagraphSyncer: {str(e)}")
+    logger.error("Falling back to original bt_utils functions")
+    metagraph_syncer = None
+    subtensor = None
 
 s3_client = boto3.client(
     's3',
@@ -130,10 +153,19 @@ async def count_requests(request: Request, call_next):
         raise
 
 
-# Timeout-protected validation functions
+# Optimized validation functions using cached metagraph
 async def verify_validator_status_with_timeout(hotkey: str, netuid: int, network: str) -> bool:
-    """Verify validator status with 2-minute timeout protection"""
+    """Verify validator status with cached metagraph and timeout fallback"""
     try:
+        # Try cached version first (should be ~1ms)
+        if metagraph_syncer is not None:
+            try:
+                metagraph = metagraph_syncer.get_metagraph(netuid)
+                return verify_validator_status_cached(hotkey, metagraph)
+            except Exception as e:
+                logger.warning(f"Cached validator verification failed for {hotkey}: {str(e)}, falling back to blockchain")
+        
+        # Fallback to original method with timeout protection
         return await asyncio.wait_for(
             asyncio.get_event_loop().run_in_executor(
                 None, verify_validator_status, hotkey, netuid, network
@@ -151,8 +183,17 @@ async def verify_validator_status_with_timeout(hotkey: str, netuid: int, network
 
 async def verify_signature_with_timeout(commitment: str, signature: str, hotkey: str, netuid: int,
                                         network: str) -> bool:
-    """Verify signature with timeout protection"""
+    """Verify signature with cached metagraph and timeout fallback"""
     try:
+        # Try cached version first (should be ~1ms)
+        if metagraph_syncer is not None:
+            try:
+                metagraph = metagraph_syncer.get_metagraph(netuid)
+                return verify_signature_cached(commitment, signature, hotkey, metagraph)
+            except Exception as e:
+                logger.warning(f"Cached signature verification failed for {hotkey}: {str(e)}, falling back to blockchain")
+        
+        # Fallback to original method with timeout protection
         return await asyncio.wait_for(
             asyncio.get_event_loop().run_in_executor(
                 None, verify_signature, commitment, signature, hotkey, netuid, network
@@ -434,6 +475,31 @@ async def health_check():
 
     stats = monitor.get_stats()
 
+    # Check metagraph syncer status
+    metagraph_ok = False
+    metagraph_info = {}
+    if metagraph_syncer is not None:
+        try:
+            metagraph = metagraph_syncer.get_metagraph(NET_UID)
+            metagraph_ok = True
+            metagraph_info = {
+                'enabled': True,
+                'netuid': NET_UID,
+                'sync_interval': METAGRAPH_SYNC_INTERVAL,
+                'hotkeys_count': len(metagraph.hotkeys) if metagraph else 0,
+                'last_sync': 'recent' if metagraph else 'unknown'
+            }
+        except Exception as e:
+            metagraph_info = {
+                'enabled': True,
+                'error': str(e)
+            }
+    else:
+        metagraph_info = {
+            'enabled': False,
+            'reason': 'Initialization failed, using fallback methods'
+        }
+
     return {
         'status': 'ok' if s3_ok and redis_ok else 'degraded',
         'timestamp': time.time(),
@@ -443,6 +509,7 @@ async def health_check():
         's3_ok': s3_ok,
         's3_latency_ms': round(s3_latency * 1000, 2),
         'redis_ok': redis_ok,
+        'metagraph_syncer': metagraph_info,
         'stats': stats,
         'timeouts': {
             'validator_verification': f"{VALIDATOR_VERIFICATION_TIMEOUT}s",
