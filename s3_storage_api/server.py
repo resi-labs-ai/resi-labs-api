@@ -308,6 +308,7 @@ async def get_folder_access(request: MinerFolderAccessRequest):
         # Use timeout-protected signature verification
         signature_valid = await verify_signature_with_timeout(commitment, signature, hotkey, NET_UID, BT_NETWORK)
         if not signature_valid:
+            logger.warning(f"MINER SIGNATURE FAILED: {hotkey} (coldkey: {coldkey})")
             raise HTTPException(status_code=401, detail="Invalid signature")
 
         policy = generate_folder_upload_policy(S3_BUCKET, folder_path, expiry_hours=24)
@@ -356,11 +357,13 @@ async def get_validator_access(request: ValidatorAccessRequest):
         # Use timeout-protected validator verification (2 minutes)
         validator_status = await verify_validator_status_with_timeout(hotkey, NET_UID, BT_NETWORK)
         if not validator_status:
+            logger.warning(f"VALIDATOR ACCESS DENIED: {hotkey} - not a validator")
             raise HTTPException(status_code=401, detail="You are not validator")
 
         # Use timeout-protected signature verification
         signature_valid = await verify_signature_with_timeout(commitment, signature, hotkey, NET_UID, BT_NETWORK)
         if not signature_valid:
+            logger.warning(f"VALIDATOR SIGNATURE FAILED: {hotkey}")
             raise HTTPException(status_code=401, detail="Invalid signature")
 
         return generate_validator_access_urls(hotkey, expiry_hours=24)
@@ -397,11 +400,13 @@ async def get_miner_specific_access(request: ValidatorAccessRequest):
         # Use timeout-protected validator verification (2 minutes)
         validator_status = await verify_validator_status_with_timeout(hotkey, NET_UID, BT_NETWORK)
         if not validator_status:
+            logger.warning(f"VALIDATOR ACCESS DENIED: {hotkey} - not a validator (requested miner: {miner_hotkey})")
             raise HTTPException(status_code=401, detail="You are not validator")
 
         # Use timeout-protected signature verification
         signature_valid = await verify_signature_with_timeout(commitment, signature, hotkey, NET_UID, BT_NETWORK)
         if not signature_valid:
+            logger.warning(f"VALIDATOR SIGNATURE FAILED: {hotkey} (requested miner: {miner_hotkey})")
             raise HTTPException(status_code=401, detail="Invalid signature")
 
         # Generate presigned URL with specific miner prefix

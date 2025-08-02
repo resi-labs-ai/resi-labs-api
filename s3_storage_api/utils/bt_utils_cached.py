@@ -43,15 +43,22 @@ def verify_signature_cached(message: str, signature_hex: str, hotkey_ss58: str, 
     try:
         # First check if hotkey is registered using cached metagraph
         if not is_hotkey_registered_cached(hotkey_ss58, metagraph):
-            print(f"Hotkey {hotkey_ss58} is not registered in cached metagraph")
+            print(f"CACHED VERIFICATION - Hotkey not registered: {hotkey_ss58}")
             return False
         
         # Verify cryptographic signature (this is fast - ~1ms)
         kp = Keypair(ss58_address=hotkey_ss58)
         signature = bytes.fromhex(signature_hex)
-        return kp.verify(message.encode(), signature)
+        signature_valid = kp.verify(message.encode(), signature)
+        
+        if not signature_valid:
+            print(f"CACHED VERIFICATION - Cryptographic signature invalid for hotkey: {hotkey_ss58}")
+            return False
+            
+        print(f"CACHED VERIFICATION - Success for hotkey: {hotkey_ss58}")
+        return True
     except Exception as e:
-        print(f"Signature verification error: {e}")
+        print(f"CACHED VERIFICATION - Error for hotkey {hotkey_ss58}: {e}")
         return False
 
 
