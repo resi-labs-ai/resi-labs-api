@@ -83,7 +83,7 @@ def verify_validator_status_cached(hotkey: str, metagraph: bt.metagraph) -> bool
         
         # Check validator permit and stake requirements
         validator_permit = bool(metagraph.validator_permit[uid])
-        stake = int(metagraph.alpha_stake[uid]) > 40_000
+        stake = int(metagraph.alpha_stake[uid]) > 20_000
         
         if validator_permit and stake:
             return True
