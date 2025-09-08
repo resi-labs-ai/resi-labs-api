@@ -1,6 +1,11 @@
-# S3 Storage for Data Universe with Folder-Based Access
+# S3 Storage API for Bittensor Subnet 46 - Resi Labs
 
-This module provides S3 compatibility for the Data Universe subnet, allowing miners to upload data directly to S3 storage instead of (or alongside) HuggingFace. The implementation includes blockchain-based authentication and folder-based access for efficient uploads and downloads.
+This API provides S3 storage access for Bittensor Subnet 46, allowing miners to upload data directly to AWS S3 storage with blockchain-based authentication and folder-based access control. Forked and adapted from the SN13 Data Universe implementation.
+
+**Subnet 46 Configuration**:
+- **Network**: Bittensor Finney (NET_UID: 46)
+- **Region**: US East (Ohio) - us-east-2
+- **Buckets**: Development, Test, Staging, and Production environments
 
 ## Features
 
@@ -75,25 +80,64 @@ The security model ensures proper isolation between miners while giving validato
 
 ### Configuration
 
-Edit the `config.py` file to set your bucket and region:
+The API supports multiple environments with different S3 buckets:
 
-```python
-# S3 configuration
-S3_BUCKET = 'your-bucket-name'  # Change to your bucket name
-S3_REGION = 'us-east-1'         # Change to your region
-SERVER_PORT = 8000              # Server port
+- **Development**: `1000-resilabs-caleb-dev-bittensor-sn46-datacollection`
+- **Test**: `2000-resilabs-test-bittensor-sn46-datacollection` 
+- **Staging**: `3000-resilabs-staging-bittensor-sn46-datacollection`
+- **Production**: `4000-resilabs-prod-bittensor-sn46-datacollection`
+
+Copy and configure environment files:
+```bash
+# For development
+cp env.development.example .env.development
+# Edit .env.development with your AWS credentials
+
+# For production
+cp env.production.example .env.production
+# Edit .env.production with your AWS credentials
+```
+
+Required environment variables:
+```bash
+AWS_ACCESS_KEY_ID=your-aws-access-key
+AWS_SECRET_ACCESS_KEY=your-aws-secret-key
+S3_BUCKET=your-bucket-name
+S3_REGION=us-east-2
+NET_UID=46
 ```
 
 ### Running the Server
 
+#### Local Development
 ```bash
-# Run the optimized FastAPI server
-python -m uvicorn updated_server:app --host 0.0.0.0 --port 8000 --reload
+# Install dependencies
+pip install -r requirements.txt
 
-# Or use Docker
-docker build -t s3-auth-server .
-docker run -p 8000:8000 s3-auth-server
+# Set environment variables
+export AWS_ACCESS_KEY_ID=your-key
+export AWS_SECRET_ACCESS_KEY=your-secret
+export S3_BUCKET=1000-resilabs-caleb-dev-bittensor-sn46-datacollection
+export NET_UID=46
+
+# Run the server
+python -m uvicorn s3_storage_api.server:app --host 0.0.0.0 --port 8000 --reload
 ```
+
+#### Docker Deployment
+```bash
+# Development
+docker-compose up --build
+
+# Production (with environment variables)
+S3_BUCKET=4000-resilabs-prod-bittensor-sn46-datacollection \
+AWS_ACCESS_KEY_ID=your-key \
+AWS_SECRET_ACCESS_KEY=your-secret \
+docker-compose up --build -d
+```
+
+#### AWS Deployment
+See `DEPLOYMENT.md` for comprehensive AWS deployment instructions including ECS, Lambda, and other options.
 
 ## Testing
 

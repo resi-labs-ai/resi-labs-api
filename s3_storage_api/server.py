@@ -25,13 +25,13 @@ import bittensor as bt
 load_dotenv()
 
 # Configuration
-S3_BUCKET = os.getenv('S3_BUCKET', 'data-universe-storage')
-S3_REGION = os.getenv('S3_REGION', 'nyc3')
-AWS_ACCESS_KEY = os.getenv("DO_SPACES_KEY", "your-access-key-here")
-AWS_SECRET_KEY = os.getenv("DO_SPACES_SECRET", "your-secret-key-here")
-SERVER_PORT = int(os.getenv('PORT', '8501'))
+S3_BUCKET = os.getenv('S3_BUCKET', '1000-resilabs-caleb-dev-bittensor-sn46-datacollection')
+S3_REGION = os.getenv('S3_REGION', 'us-east-2')
+AWS_ACCESS_KEY = os.getenv("AWS_ACCESS_KEY_ID", "your-access-key-here")
+AWS_SECRET_KEY = os.getenv("AWS_SECRET_ACCESS_KEY", "your-secret-key-here")
+SERVER_PORT = int(os.getenv('PORT', '8000'))
 BT_NETWORK = os.getenv("BT_NETWORK", "finney")
-NET_UID = int(os.getenv('NET_UID', '13'))
+NET_UID = int(os.getenv('NET_UID', '46'))
 COMMITMENT_VALIDITY_SECONDS = 60
 
 DAILY_LIMIT_PER_MINER = 20
@@ -51,9 +51,9 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(
-    title="S3 Auth Server for Data Universe - 2min Timeout",
-    description="Authentication server for S3 storage with 2-minute timeout protection",
-    version="1.2.0",
+    title="S3 Auth Server for Subnet 46 - Resi Labs",
+    description="Authentication server for S3 storage with 2-minute timeout protection for Bittensor Subnet 46",
+    version="1.0.0",
 )
 
 app.add_middleware(
@@ -84,7 +84,7 @@ s3_client = boto3.client(
     's3',
     aws_access_key_id=AWS_ACCESS_KEY,
     aws_secret_access_key=AWS_SECRET_KEY,
-    endpoint_url="https://nyc3.digitaloceanspaces.com",
+    region_name=S3_REGION,
     config=Config(
         signature_version='s3v4',
         retries={'max_attempts': 3, 'mode': 'adaptive'},
@@ -246,7 +246,7 @@ def generate_folder_upload_policy(bucket: str, folder_prefix: str, expiry_hours:
         ExpiresIn=expiry_hours * 3600
     )
 
-    post["url"] = f"https://{bucket}.nyc3.digitaloceanspaces.com"
+    post["url"] = f"https://{bucket}.s3.{S3_REGION}.amazonaws.com"
     return post
 
 
