@@ -9,4 +9,4 @@ pydantic>=2.0.0
 bittensor>=9.0.0
 python-dotenv>=1.0.0
 redis>=5.0.0
-asyncio-timeout>=4.0.0
+async-timeout>=4.0.0

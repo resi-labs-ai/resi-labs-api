@@ -7,19 +7,8 @@ services:
       dockerfile: Dockerfile
     ports:
       - "8000:8000"
-    environment:
-      - PORT=8000
-      - S3_BUCKET=${S3_BUCKET:-1000-resilabs-caleb-dev-bittensor-sn46-datacollection}
-      - S3_REGION=${S3_REGION:-us-east-2}
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-      - BT_NETWORK=${BT_NETWORK:-finney}
-      - NET_UID=${NET_UID:-46}
-      - DAILY_LIMIT_PER_MINER=${DAILY_LIMIT_PER_MINER:-20}
-      - DAILY_LIMIT_PER_VALIDATOR=${DAILY_LIMIT_PER_VALIDATOR:-10000}
-      - TOTAL_DAILY_LIMIT=${TOTAL_DAILY_LIMIT:-200000}
     env_file:
-      - .env.development  # Default to development, override with --env-file for other environments
+      - .env.production  # Load environment file
     volumes:
       - .:/app
     restart: unless-stopped

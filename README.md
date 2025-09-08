@@ -1,11 +1,16 @@
 # S3 Storage API for Bittensor Subnet 46 - Resi Labs
 
-This API provides S3 storage access for Bittensor Subnet 46, allowing miners to upload data directly to AWS S3 storage with blockchain-based authentication and folder-based access control. Forked and adapted from the SN13 Data Universe implementation.
+A production-ready S3 authentication API for Bittensor Subnet 46, allowing miners to upload data and validators to access all data with blockchain-based authentication.
 
-**Subnet 46 Configuration**:
+**🌐 Live API**: http://52.15.32.154:8000
+- **Health Check**: http://52.15.32.154:8000/healthcheck  
+- **API Documentation**: http://52.15.32.154:8000/docs
+- **Usage Guide**: http://52.15.32.154:8000/commitment-formats
+
+**📋 Configuration**:
 - **Network**: Bittensor Finney (NET_UID: 46)
 - **Region**: US East (Ohio) - us-east-2
-- **Buckets**: Development, Test, Staging, and Production environments
+- **Production Bucket**: `4000-resilabs-prod-bittensor-sn46-datacollection`
 
 ## Features
 
@@ -80,31 +85,58 @@ The security model ensures proper isolation between miners while giving validato
 
 ### Configuration
 
-The API supports multiple environments with different S3 buckets:
+## 🚀 **Quick Start for Miners & Validators**
 
-- **Development**: `1000-resilabs-caleb-dev-bittensor-sn46-datacollection`
-- **Test**: `2000-resilabs-test-bittensor-sn46-datacollection` 
-- **Staging**: `3000-resilabs-staging-bittensor-sn46-datacollection`
-- **Production**: `4000-resilabs-prod-bittensor-sn46-datacollection`
+### **For Miners**
+```python
+import requests
+import time
+from bittensor import Keypair
 
-Copy and configure environment files:
-```bash
-# For development
-cp env.development.example .env.development
-# Edit .env.development with your AWS credentials
+# Your credentials
+coldkey = "your-coldkey"
+hotkey = "your-hotkey"  
+keypair = Keypair.create_from_mnemonic("your-mnemonic")
 
-# For production
-cp env.production.example .env.production
-# Edit .env.production with your AWS credentials
+# Create commitment and signature
+timestamp = int(time.time())
+commitment = f"s3:data:access:{coldkey}:{hotkey}:{timestamp}"
+signature = keypair.sign(commitment).hex()
+
+# Request folder access
+response = requests.post("http://52.15.32.154:8000/get-folder-access", json={
+    "coldkey": coldkey,
+    "hotkey": hotkey, 
+    "timestamp": timestamp,
+    "signature": signature
+})
+
+# Use the returned URL and fields to upload to S3
 ```
 
-Required environment variables:
-```bash
-AWS_ACCESS_KEY_ID=your-aws-access-key
-AWS_SECRET_ACCESS_KEY=your-aws-secret-key
-S3_BUCKET=your-bucket-name
-S3_REGION=us-east-2
-NET_UID=46
+### **For Validators**
+```python
+import requests
+import time
+from bittensor import Keypair
+
+# Your validator credentials
+hotkey = "your-validator-hotkey"
+keypair = Keypair.create_from_mnemonic("your-mnemonic")
+
+# Create commitment and signature  
+timestamp = int(time.time())
+commitment = f"s3:validator:access:{timestamp}"
+signature = keypair.sign(commitment).hex()
+
+# Request global access
+response = requests.post("http://52.15.32.154:8000/get-validator-access", json={
+    "hotkey": hotkey,
+    "timestamp": timestamp, 
+    "signature": signature
+})
+
+# Use the returned URLs to access all miner data
 ```
 
 ### Running the Server
@@ -136,8 +168,19 @@ AWS_SECRET_ACCESS_KEY=your-secret \
 docker-compose up --build -d
 ```
 
-#### AWS Deployment
-See `DEPLOYMENT.md` for comprehensive AWS deployment instructions including ECS, Lambda, and other options.
+## 📚 **Documentation**
+
+- **[FINAL_DEPLOYMENT_GUIDE.md](FINAL_DEPLOYMENT_GUIDE.md)**: Complete deployment process and architecture explanation
+- **[API Documentation](http://52.15.32.154:8000/docs)**: Interactive API documentation  
+- **[Commitment Formats](http://52.15.32.154:8000/commitment-formats)**: How to format requests and signatures
+
+## 🏗️ **Architecture**
+
+- **AWS ECS Fargate**: Serverless container hosting
+- **AWS ECR**: Docker image registry  
+- **AWS S3**: Data storage (4 environment buckets)
+- **AWS Secrets Manager**: Secure credential storage
+- **CloudWatch**: Logging and monitoring
 
 ## Testing
 
