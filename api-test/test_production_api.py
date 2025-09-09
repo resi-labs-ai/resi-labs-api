@@ -222,8 +222,13 @@ def main():
     parser.add_argument("--hotkey", required=True, help="Hotkey name")
     parser.add_argument("--test-miner-hotkey", help="Test miner hotkey for validator-specific access")
     parser.add_argument("--skip-validator", action="store_true", help="Skip validator tests")
+    parser.add_argument("--dev", action="store_true", help="Use local development server")
     
     args = parser.parse_args()
+    
+    # Set global flag for dev mode
+    global USE_DEV
+    USE_DEV = args.dev
     
     print("🚀 S3 Auth API Testing Script")
     print("=" * 50)
