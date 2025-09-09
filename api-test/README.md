@@ -96,6 +96,23 @@ python api-test/test_production_api.py --wallet WALLET_NAME --hotkey HOTKEY_NAME
 
 **Note**: This test connects to the live production API and requires wallets registered on the production network (finney, subnet 46).
 
+### `test_mainnet_s3_auth.py` - Mainnet User Test Script
+**Purpose**: Simple, user-friendly test script for mainnet miners and validators to verify their setup
+
+**Usage**:
+```bash
+python api-test/test_mainnet_s3_auth.py --wallet WALLET_NAME --hotkey HOTKEY_NAME
+```
+
+**Features**:
+- Colorized, user-friendly output
+- Step-by-step verification process
+- Clear success/failure indicators
+- Detailed troubleshooting information
+- Designed for end-users (miners/validators)
+
+**Note**: This is the recommended script for miners and validators to test their setup before participating in subnet 46.
+
 ## 🔧 Configuration Requirements
 
 ### Network and Subnet Configuration
