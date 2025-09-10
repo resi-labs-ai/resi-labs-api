@@ -221,29 +221,58 @@ btcli subnet metagraph --subtensor.network test --netuid 428
 ```
 
 ### **Step 3: Become a Validator (Optional)**
+
+**Important Note:** Validator permissions on testnet subnet 428 are **manually granted by the subnet owner** due to the testnet's controlled environment.
+
+#### **Option A: Request Validator Status (Recommended)**
+
+If you want to test validator functionality:
+
+1. **Join our Discord**: [Resi Labs Discord Server](https://discord.gg/resilabs)
+2. **Message the team**: Send a DM to `@resi-labs-team` with:
+   - Your wallet name and hotkey name
+   - Your hotkey address (from the test output)
+   - Brief explanation of why you need validator access
+3. **Wait for approval**: We'll grant validator permissions within 24 hours
+4. **Test validator access**: Use the test script to verify permissions
+
+#### **Option B: Standard Process (May Not Work)**
+
+The standard Bittensor validator process may not work on this testnet:
+
 ```bash
 # 1. Ensure you have sufficient testnet TAO (typically 100+)
 btcli wallet balance --wallet.name YOUR_WALLET --subtensor.network test
 
-# 2. Set weights to become a validator
-btcli subnet set_weights --subtensor.network test --netuid 428 --wallet.name YOUR_WALLET --wallet.hotkey YOUR_HOTKEY
+# 2. Try to set weights (may fail due to testnet restrictions)
+btcli weights commit --subtensor.network test --netuid 428 --wallet.name YOUR_WALLET --wallet.hotkey YOUR_HOTKEY
 
 # 3. Check validator status
 python test_testnet_s3_auth.py --wallet YOUR_WALLET --hotkey YOUR_HOTKEY --validator-check-only
 
-# Note: Validator permit may take some time to be granted
+# Note: This may not work due to testnet configuration
 ```
+
+#### **Why Manual Approval?**
+
+- **Testnet Environment**: This is a controlled test environment, not open competition
+- **Resource Management**: We limit validator slots for testing purposes
+- **Quality Control**: We ensure only serious testers get validator access
+- **Support**: We can provide better support to approved validators
 
 ## 🧪 Testing Workflow
 
 1. **Get Testnet TAO**: Use faucet to get free testnet tokens
 2. **Register on Testnet**: Register as miner on subnet 428 testnet
 3. **Test API Access**: Run the testnet test script
-4. **Become Validator** (optional): Set weights to get validator permissions
-5. **Move to Production**: Once testnet works, test on subnet 46 mainnet
-6. **Begin Mining/Validating**: Start participating with confidence
+4. **Request Validator Status** (optional): Contact us on Discord for validator permissions
+5. **Test Validator Access**: Once approved, test validator functionality
+6. **Move to Production**: Once testnet works, test on subnet 46 mainnet
+7. **Begin Mining/Validating**: Start participating with confidence
 
 ## 📞 Support
+
+### **For General Issues**
 
 If your testnet test fails after trying the troubleshooting steps:
 
@@ -251,6 +280,24 @@ If your testnet test fails after trying the troubleshooting steps:
 2. **Specify you're testing on testnet** (subnet 428)
 3. **Check the GitHub repository** for known issues
 4. **Contact the development team** with specific error messages
+
+### **For Validator Access Requests**
+
+**Discord Contact:**
+- **Server**: [Resi Labs Discord](https://discord.gg/resilabs)
+- **Channel**: `#testnet-support`
+- **Direct Message**: `@resi-labs-team`
+
+**Required Information:**
+- Wallet name and hotkey name
+- Hotkey address (from test output)
+- Brief explanation of testing needs
+- Expected timeline for testing
+
+**Response Time:**
+- **Validator requests**: Within 24 hours
+- **General support**: Within 48 hours
+- **Emergency issues**: Use `@urgent` tag in Discord
 
 ---
 
