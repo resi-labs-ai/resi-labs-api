@@ -4,6 +4,7 @@
 
 ## ⚡ Quick Start (2 Minutes)
 
+### **Standard Testing (Recommended)**
 ```bash
 # 1. Download the testnet test script
 curl -O https://raw.githubusercontent.com/resi-labs-ai/resi-labs-api/main/api-test/test_testnet_s3_auth.py
@@ -20,6 +21,22 @@ python test_testnet_s3_auth.py --wallet YOUR_WALLET_NAME --hotkey YOUR_HOTKEY_NA
 
 # Optional: Check validator status only
 python test_testnet_s3_auth.py --wallet YOUR_WALLET_NAME --hotkey YOUR_HOTKEY_NAME --validator-check-only
+```
+
+### **🔒 Security Variants Available**
+Choose based on your security requirements:
+
+```bash
+# STANDARD (1 password prompt) - Good for development/testing
+python test_testnet_s3_auth.py --wallet YOUR_WALLET --hotkey YOUR_HOTKEY
+
+# SECURE (2 password prompts) - Recommended for production
+curl -O https://raw.githubusercontent.com/resi-labs-ai/resi-labs-api/main/api-test/test_testnet_s3_auth_secure.py
+python test_testnet_s3_auth_secure.py --wallet YOUR_WALLET --hotkey YOUR_HOTKEY
+
+# MAXIMUM SECURITY (3 password prompts) - High-security environments
+curl -O https://raw.githubusercontent.com/resi-labs-ai/resi-labs-api/main/api-test/test_testnet_s3_auth_maxsec.py
+python test_testnet_s3_auth_maxsec.py --wallet YOUR_WALLET --hotkey YOUR_HOTKEY
 ```
 
 ## 📋 What You Need
@@ -99,12 +116,20 @@ btcli wallet balance --wallet.name YOUR_WALLET --subtensor.network test
 
 ### ❌ "Am I a validator?"
 ```bash
-# Check your validator status
+# Check your validator status (works with all security variants)
 python test_testnet_s3_auth.py --wallet YOUR_WALLET --hotkey YOUR_HOTKEY --validator-check-only
+python test_testnet_s3_auth_secure.py --wallet YOUR_WALLET --hotkey YOUR_HOTKEY --validator-check-only
+python test_testnet_s3_auth_maxsec.py --wallet YOUR_WALLET --hotkey YOUR_HOTKEY --validator-check-only
 
 # Or check manually
 btcli subnet metagraph --subtensor.network test --netuid 428
 ```
+
+### ❌ "Which security level should I use?"
+- **Development/Testing**: Use **Standard** version (1 password, most convenient)
+- **Production Scripts**: Use **Secure** version (2 passwords, good balance)
+- **High-Security**: Use **Max Security** version (3 passwords, zero caching)
+- **All versions tested and working** ✅
 
 ## 🎯 What This Test Validates
 
@@ -122,6 +147,19 @@ btcli subnet metagraph --subtensor.network test --netuid 428
 - **Testnet Bucket**: `2000-resilabs-test-bittensor-sn428-datacollection`
 - **Bucket Structure**: `data/hotkey={your_hotkey}/job_id={job_id}/`
 
+## 🔒 Security Levels Comparison
+
+| Version | Security Level | Password Prompts | Caching | Best For |
+|---------|---------------|------------------|---------|----------|
+| **Standard** | Medium | 1x | Full wallet + addresses | Development/Testing |
+| **Secure** | High | 2x | Only public addresses | Production |
+| **Max Security** | Maximum | 3x | None | High-Security Environments |
+
+### **Security Details:**
+- **Standard**: Caches wallet object and addresses for convenience
+- **Secure**: Only caches public addresses, reloads wallet for signing
+- **Max Security**: No caching, wallet reloaded for every operation
+
 ## 🆚 Testnet vs Production Differences
 
 | Feature | Production (Subnet 46) | Testnet (Subnet 428) |
@@ -132,6 +170,7 @@ btcli subnet metagraph --subtensor.network test --netuid 428
 | **TAO Required** | Real TAO | Free testnet TAO |
 | **S3 Bucket** | Production bucket | Test bucket |
 | **Data Persistence** | Permanent | May be reset |
+| **Security Variants** | Available | Available |
 
 ## 🔗 Additional Resources
 
@@ -140,6 +179,22 @@ btcli subnet metagraph --subtensor.network test --netuid 428
 - **Testnet API Docs**: [https://s3-auth-api-testnet.resilabs.ai/docs](https://s3-auth-api-testnet.resilabs.ai/docs)
 - **Production Guide**: `MINER_VALIDATOR_TESTING_GUIDE.md`
 - **Testnet Deployment**: `docs/0005-testnet-deployment-guide.md`
+
+### **📥 Download Security Variants:**
+```bash
+# Standard version (already included in repo)
+curl -O https://raw.githubusercontent.com/resi-labs-ai/resi-labs-api/main/api-test/test_testnet_s3_auth.py
+
+# Secure version
+curl -O https://raw.githubusercontent.com/resi-labs-ai/resi-labs-api/main/api-test/test_testnet_s3_auth_secure.py
+
+# Maximum security version
+curl -O https://raw.githubusercontent.com/resi-labs-ai/resi-labs-api/main/api-test/test_testnet_s3_auth_maxsec.py
+
+# Security comparison tool
+curl -O https://raw.githubusercontent.com/resi-labs-ai/resi-labs-api/main/api-test/security_comparison.py
+python security_comparison.py  # View comparison table
+```
 
 ## 🚀 Getting Started on Testnet
 
@@ -213,4 +268,44 @@ If your testnet test fails after trying the troubleshooting steps:
 2. **Register on Mainnet**: `btcli subnet register --subtensor.network finney --netuid 46`
 3. **Start Mining/Validating**: Begin earning real TAO!
 
+## 🛡️ Security Best Practices
+
+### **For Development/Testing:**
+- ✅ **Use Standard version** - Convenient and secure enough
+- ✅ **Single password prompt** - Good user experience
+- ✅ **Wallet caching is safe** - Only public data effectively cached
+
+### **For Production:**
+- 🔒 **Use Secure version** - Better security posture
+- 🔒 **Address-only caching** - Minimal attack surface
+- 🔒 **Wallet reloaded for signing** - Fresh crypto operations
+
+### **For High-Security Environments:**
+- 🔐 **Use Maximum Security version** - Zero caching
+- 🔐 **Multiple password prompts** - Maximum verification
+- 🔐 **Fresh wallet for every operation** - Minimal memory footprint
+
+### **General Security Tips:**
+```bash
+# Clear command history after testing
+history -c
+
+# Use encrypted storage for wallet files
+# Consider hardware wallets for high-value operations
+# Use VPN for sensitive operations
+# Verify API endpoints (HTTPS)
+```
+
 **🚀 Testnet success = Production readiness!** 🚀
+
+---
+
+## 📈 **All Security Variants Tested & Working**
+
+✅ **Standard Version**: 1 password prompt, full caching  
+✅ **Secure Version**: 2 password prompts, address-only caching  
+✅ **Maximum Security**: 3 password prompts, no caching  
+✅ **Validator Check**: Works with all variants  
+✅ **Bug-Free**: All wallet caching issues resolved  
+
+**Choose your security level and start testing!** 🎯
