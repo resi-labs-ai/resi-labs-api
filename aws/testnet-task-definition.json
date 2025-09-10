@@ -9,7 +9,7 @@
     "containerDefinitions": [
         {
             "name": "subnet428-testnet-api",
-            "image": "532533045818.dkr.ecr.us-east-2.amazonaws.com/subnet428-testnet-s3-api:latest",
+            "image": "532533045818.dkr.ecr.us-east-2.amazonaws.com/subnet428-testnet-s3-api:v2",
             "portMappings": [
                 {
                     "containerPort": 8000,
