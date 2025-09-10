@@ -15,8 +15,11 @@ source venv/bin/activate
 # 3. Install requirements
 pip install bittensor requests
 
-# 4. Test your testnet setup
+# 4. Test your testnet setup (you'll be prompted for password only once)
 python test_testnet_s3_auth.py --wallet YOUR_WALLET_NAME --hotkey YOUR_HOTKEY_NAME
+
+# Optional: Check validator status only
+python test_testnet_s3_auth.py --wallet YOUR_WALLET_NAME --hotkey YOUR_HOTKEY_NAME --validator-check-only
 ```
 
 ## 📋 What You Need
@@ -84,11 +87,23 @@ btcli subnet metagraph --subtensor.network test --netuid 428
 
 ### ❌ "Need testnet TAO"
 ```bash
-# Get free testnet TAO from faucet
+# Get free testnet TAO from faucet (multiple options)
 btcli wallet faucet --wallet.name YOUR_WALLET --subtensor.network test
+
+# Alternative: Web-based faucet
+# Visit: https://app.minersunion.ai/testnet-faucet
 
 # Check your balance
 btcli wallet balance --wallet.name YOUR_WALLET --subtensor.network test
+```
+
+### ❌ "Am I a validator?"
+```bash
+# Check your validator status
+python test_testnet_s3_auth.py --wallet YOUR_WALLET --hotkey YOUR_HOTKEY --validator-check-only
+
+# Or check manually
+btcli subnet metagraph --subtensor.network test --netuid 428
 ```
 
 ## 🎯 What This Test Validates
@@ -126,12 +141,52 @@ btcli wallet balance --wallet.name YOUR_WALLET --subtensor.network test
 - **Production Guide**: `MINER_VALIDATOR_TESTING_GUIDE.md`
 - **Testnet Deployment**: `docs/0005-testnet-deployment-guide.md`
 
+## 🚀 Getting Started on Testnet
+
+### **Step 1: Get Testnet TAO**
+```bash
+# Option 1: CLI Faucet
+btcli wallet faucet --wallet.name YOUR_WALLET --subtensor.network test
+
+# Option 2: Web Faucet (Recommended)
+# Visit: https://app.minersunion.ai/testnet-faucet
+# Enter your coldkey address and request testnet TAO
+
+# Verify balance
+btcli wallet balance --wallet.name YOUR_WALLET --subtensor.network test
+```
+
+### **Step 2: Register as Miner**
+```bash
+# Register your hotkey on testnet subnet 428
+btcli subnet register --subtensor.network test --netuid 428 --wallet.name YOUR_WALLET --wallet.hotkey YOUR_HOTKEY
+
+# Verify registration
+btcli subnet metagraph --subtensor.network test --netuid 428
+```
+
+### **Step 3: Become a Validator (Optional)**
+```bash
+# 1. Ensure you have sufficient testnet TAO (typically 100+)
+btcli wallet balance --wallet.name YOUR_WALLET --subtensor.network test
+
+# 2. Set weights to become a validator
+btcli subnet set_weights --subtensor.network test --netuid 428 --wallet.name YOUR_WALLET --wallet.hotkey YOUR_HOTKEY
+
+# 3. Check validator status
+python test_testnet_s3_auth.py --wallet YOUR_WALLET --hotkey YOUR_HOTKEY --validator-check-only
+
+# Note: Validator permit may take some time to be granted
+```
+
 ## 🧪 Testing Workflow
 
-1. **Start with Testnet**: Test your setup on subnet 428 testnet first
-2. **Verify Functionality**: Ensure authentication and S3 access work
-3. **Move to Production**: Once testnet works, test on subnet 46 mainnet
-4. **Begin Mining/Validating**: Start participating with confidence
+1. **Get Testnet TAO**: Use faucet to get free testnet tokens
+2. **Register on Testnet**: Register as miner on subnet 428 testnet
+3. **Test API Access**: Run the testnet test script
+4. **Become Validator** (optional): Set weights to get validator permissions
+5. **Move to Production**: Once testnet works, test on subnet 46 mainnet
+6. **Begin Mining/Validating**: Start participating with confidence
 
 ## 📞 Support
 

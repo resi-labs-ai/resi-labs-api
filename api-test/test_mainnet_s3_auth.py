@@ -80,14 +80,19 @@ def check_api_health() -> bool:
         return False
 
 def load_wallet(wallet_name: str, hotkey_name: str) -> Optional[bt.wallet]:
-    """Load and validate a Bittensor wallet"""
+    """Load and validate a Bittensor wallet (caches addresses to avoid multiple password prompts)"""
     print_info(f"Loading wallet: {wallet_name}, hotkey: {hotkey_name}")
     try:
         wallet = bt.wallet(name=wallet_name, hotkey=hotkey_name)
         
-        # Verify wallet can be accessed
+        # Cache addresses to avoid multiple password prompts
+        print_info("Caching wallet addresses (you may be prompted for password once)...")
         coldkey_address = wallet.coldkey.ss58_address
         hotkey_address = wallet.hotkey.ss58_address
+        
+        # Store addresses as attributes to avoid re-prompting
+        wallet._cached_coldkey_address = coldkey_address
+        wallet._cached_hotkey_address = hotkey_address
         
         print_success("Wallet loaded successfully!")
         print(f"   Coldkey: {coldkey_address}")
@@ -137,8 +142,9 @@ def test_miner_access(wallet: bt.wallet) -> bool:
     print_info("Testing miner access...")
     
     try:
-        coldkey = wallet.coldkey.ss58_address
-        hotkey = wallet.hotkey.ss58_address
+        # Use cached addresses to avoid password re-prompts
+        coldkey = getattr(wallet, '_cached_coldkey_address', wallet.coldkey.ss58_address)
+        hotkey = getattr(wallet, '_cached_hotkey_address', wallet.hotkey.ss58_address)
         timestamp = int(time.time())
         
         # Create commitment string
@@ -203,7 +209,8 @@ def test_validator_access(wallet: bt.wallet) -> bool:
     print_info("Testing validator access...")
     
     try:
-        hotkey = wallet.hotkey.ss58_address
+        # Use cached address to avoid password re-prompts
+        hotkey = getattr(wallet, '_cached_hotkey_address', wallet.hotkey.ss58_address)
         timestamp = int(time.time())
         
         # Create commitment string
@@ -268,6 +275,47 @@ def test_validator_access(wallet: bt.wallet) -> bool:
         print_error(f"Validator access test failed: {e}")
         return False
 
+def check_validator_status(wallet_name: str, hotkey_name: str) -> bool:
+    """Standalone validator status checker"""
+    print_header("Validator Status Check")
+    print_info("This will check if your hotkey is registered as a validator on mainnet")
+    
+    try:
+        wallet = bt.wallet(name=wallet_name, hotkey=hotkey_name)
+        hotkey_address = wallet.hotkey.ss58_address
+        
+        subtensor = bt.subtensor(network=MAINNET_NETWORK)
+        metagraph = subtensor.metagraph(netuid=MAINNET_SUBNET)
+        
+        if hotkey_address in metagraph.hotkeys:
+            idx = metagraph.hotkeys.index(hotkey_address)
+            is_validator = bool(metagraph.validator_permit[idx])
+            stake = float(metagraph.S[idx])
+            
+            print_success(f"Hotkey is registered on mainnet subnet {MAINNET_SUBNET}!")
+            print(f"   Position: {idx}")
+            print(f"   Stake: {stake:.4f} TAO")
+            
+            if is_validator:
+                print_success("✅ You ARE a validator!")
+                print_info("You can test validator access with the full test script")
+            else:
+                print_warning("❌ You are NOT a validator (you're a miner)")
+                print_info("To become a validator:")
+                print_info("  1. Ensure sufficient stake (typically 1000+ TAO)")
+                print_info("  2. Run: btcli subnet set_weights --subtensor.network finney --netuid 46")
+                print_info("  3. Wait for validator permit to be granted")
+            
+            return is_validator
+        else:
+            print_error("Hotkey is NOT registered on mainnet subnet 46")
+            print_info("Register first: btcli subnet register --subtensor.network finney --netuid 46")
+            return False
+            
+    except Exception as e:
+        print_error(f"Failed to check validator status: {e}")
+        return False
+
 def main():
     parser = argparse.ArgumentParser(
         description="Test S3 Auth API access for mainnet miners and validators",
@@ -285,8 +333,14 @@ API: https://s3-auth-api.resilabs.ai
     parser.add_argument("--wallet", required=True, help="Wallet name")
     parser.add_argument("--hotkey", required=True, help="Hotkey name")
     parser.add_argument("--skip-health", action="store_true", help="Skip API health check")
+    parser.add_argument("--validator-check-only", action="store_true", help="Only check validator status and exit")
     
     args = parser.parse_args()
+    
+    # Handle validator-check-only mode
+    if args.validator_check_only:
+        check_validator_status(args.wallet, args.hotkey)
+        sys.exit(0)
     
     print_header("S3 Auth API Mainnet Test")
     print(f"Testing wallet: {args.wallet}")
@@ -312,7 +366,8 @@ API: https://s3-auth-api.resilabs.ai
     
     # Step 3: Verify registration
     print_header("Step 3: Registration Verification")
-    reg_info = verify_registration(wallet.hotkey.ss58_address)
+    hotkey_address = getattr(wallet, '_cached_hotkey_address', wallet.hotkey.ss58_address)
+    reg_info = verify_registration(hotkey_address)
     if not reg_info.get("registered", False):
         print_error("Cannot proceed - hotkey not registered")
         print_info("Register with: btcli subnet register --subtensor.network finney --netuid 46")

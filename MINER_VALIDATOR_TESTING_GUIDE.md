@@ -15,8 +15,11 @@ source venv/bin/activate
 # 3. Install requirements
 pip install bittensor requests
 
-# 4. Test your setup
+# 4. Test your setup (you'll be prompted for password only once)
 python test_mainnet_s3_auth.py --wallet YOUR_WALLET_NAME --hotkey YOUR_HOTKEY_NAME
+
+# Optional: Check validator status only
+python test_mainnet_s3_auth.py --wallet YOUR_WALLET_NAME --hotkey YOUR_HOTKEY_NAME --validator-check-only
 ```
 
 ## 📋 What You Need
@@ -79,6 +82,15 @@ btcli subnet metagraph --subtensor.network finney --netuid 46
 - Your hotkey is registered as a miner, not validator
 - You can still mine! The test will check miner access instead
 - To become a validator, you need sufficient stake and validator permissions
+
+### ❌ "Am I a validator?"
+```bash
+# Check your validator status
+python test_mainnet_s3_auth.py --wallet YOUR_WALLET --hotkey YOUR_HOTKEY --validator-check-only
+
+# Or check manually
+btcli subnet metagraph --subtensor.network finney --netuid 46
+```
 
 ## 🎯 What This Test Validates
 
