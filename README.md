@@ -2,15 +2,24 @@
 
 A production-ready S3 authentication API for Bittensor Subnet 46, allowing miners to upload data and validators to access all data with blockchain-based authentication.
 
-**🌐 Live API**: http://52.15.32.154:8000
-- **Health Check**: http://52.15.32.154:8000/healthcheck  
-- **API Documentation**: http://52.15.32.154:8000/docs
-- **Usage Guide**: http://52.15.32.154:8000/commitment-formats
+**🌐 Production API**: https://s3-auth-api.resilabs.ai
+- **Health Check**: https://s3-auth-api.resilabs.ai/healthcheck  
+- **API Documentation**: https://s3-auth-api.resilabs.ai/docs
+- **Usage Guide**: https://s3-auth-api.resilabs.ai/commitment-formats
 
-**📋 Configuration**:
+**🧪 Testnet API**: https://s3-auth-api-testnet.resilabs.ai
+- **Health Check**: https://s3-auth-api-testnet.resilabs.ai/healthcheck  
+- **API Documentation**: https://s3-auth-api-testnet.resilabs.ai/docs
+
+**📋 Production Configuration**:
 - **Network**: Bittensor Finney (NET_UID: 46)
 - **Region**: US East (Ohio) - us-east-2
 - **Production Bucket**: `4000-resilabs-prod-bittensor-sn46-datacollection`
+
+**🧪 Testnet Configuration**:
+- **Network**: Bittensor Testnet (NET_UID: 428)
+- **Region**: US East (Ohio) - us-east-2
+- **Testnet Bucket**: `2000-resilabs-test-bittensor-sn428-datacollection`
 
 ## Features
 
@@ -184,13 +193,25 @@ docker-compose up --build -d
 
 ## Testing
 
-The repository includes several test utilities:
+### 🚀 Quick Testing (Recommended)
+
+**For Production (Subnet 46):**
+- **[MINER_VALIDATOR_TESTING_GUIDE.md](MINER_VALIDATOR_TESTING_GUIDE.md)**: Complete testing guide for production API
+- Quick test: `python api-test/test_mainnet_s3_auth.py --wallet YOUR_WALLET --hotkey YOUR_HOTKEY`
+
+**For Testnet (Subnet 428):**
+- **[TESTNET_MINER_VALIDATOR_TESTING_GUIDE.md](TESTNET_MINER_VALIDATOR_TESTING_GUIDE.md)**: Complete testing guide for testnet API
+- Quick test: `python api-test/test_testnet_s3_auth.py --wallet YOUR_WALLET --hotkey YOUR_HOTKEY`
+
+### 🔧 Development Testing
+
+The repository includes several development test utilities:
 
 - **`cross_folder_test.py`**: Tests the security of folder isolation
 - **`test_upload.py`**: Demonstrates miner upload workflows
 - **`download_test.py`**: Tests validator download capabilities
 
-Run tests with:
+Run development tests with:
 
 ```bash
 # Test folder security
