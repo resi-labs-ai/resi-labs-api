@@ -79,6 +79,9 @@ def check_api_health() -> bool:
         print_warning("Make sure the API is running and accessible")
         return False
 
+# Global cache for wallet addresses to avoid multiple password prompts
+_wallet_cache = {}
+
 def load_wallet(wallet_name: str, hotkey_name: str) -> Optional[bt.wallet]:
     """Load and validate a Bittensor wallet (caches addresses to avoid multiple password prompts)"""
     print_info(f"Loading wallet: {wallet_name}, hotkey: {hotkey_name}")
@@ -90,9 +93,13 @@ def load_wallet(wallet_name: str, hotkey_name: str) -> Optional[bt.wallet]:
         coldkey_address = wallet.coldkey.ss58_address
         hotkey_address = wallet.hotkey.ss58_address
         
-        # Store addresses as attributes to avoid re-prompting
-        wallet._cached_coldkey_address = coldkey_address
-        wallet._cached_hotkey_address = hotkey_address
+        # Store addresses in global cache
+        cache_key = f"{wallet_name}:{hotkey_name}"
+        _wallet_cache[cache_key] = {
+            'coldkey': coldkey_address,
+            'hotkey': hotkey_address,
+            'wallet': wallet
+        }
         
         print_success("Wallet loaded successfully!")
         print(f"   Coldkey: {coldkey_address}")
@@ -137,14 +144,22 @@ def verify_registration(hotkey_address: str) -> Dict[str, Any]:
         print_error(f"Failed to verify registration: {e}")
         return {"registered": False, "error": str(e)}
 
-def test_miner_access(wallet: bt.wallet) -> bool:
+def get_cached_addresses(wallet: bt.wallet, wallet_name: str, hotkey_name: str) -> tuple:
+    """Get cached wallet addresses"""
+    cache_key = f"{wallet_name}:{hotkey_name}"
+    if cache_key in _wallet_cache:
+        return _wallet_cache[cache_key]['coldkey'], _wallet_cache[cache_key]['hotkey']
+    else:
+        # Fallback to direct access if cache miss
+        return wallet.coldkey.ss58_address, wallet.hotkey.ss58_address
+
+def test_miner_access(wallet: bt.wallet, wallet_name: str, hotkey_name: str) -> bool:
     """Test miner access to S3 storage"""
     print_info("Testing miner access...")
     
     try:
         # Use cached addresses to avoid password re-prompts
-        coldkey = getattr(wallet, '_cached_coldkey_address', wallet.coldkey.ss58_address)
-        hotkey = getattr(wallet, '_cached_hotkey_address', wallet.hotkey.ss58_address)
+        coldkey, hotkey = get_cached_addresses(wallet, wallet_name, hotkey_name)
         timestamp = int(time.time())
         
         # Create commitment string
@@ -204,13 +219,13 @@ def test_miner_access(wallet: bt.wallet) -> bool:
         print_error(f"Miner access test failed: {e}")
         return False
 
-def test_validator_access(wallet: bt.wallet) -> bool:
+def test_validator_access(wallet: bt.wallet, wallet_name: str, hotkey_name: str) -> bool:
     """Test validator access to S3 storage"""
     print_info("Testing validator access...")
     
     try:
         # Use cached address to avoid password re-prompts
-        hotkey = getattr(wallet, '_cached_hotkey_address', wallet.hotkey.ss58_address)
+        _, hotkey = get_cached_addresses(wallet, wallet_name, hotkey_name)
         timestamp = int(time.time())
         
         # Create commitment string
@@ -366,7 +381,7 @@ API: https://s3-auth-api.resilabs.ai
     
     # Step 3: Verify registration
     print_header("Step 3: Registration Verification")
-    hotkey_address = getattr(wallet, '_cached_hotkey_address', wallet.hotkey.ss58_address)
+    _, hotkey_address = get_cached_addresses(wallet, args.wallet, args.hotkey)
     reg_info = verify_registration(hotkey_address)
     if not reg_info.get("registered", False):
         print_error("Cannot proceed - hotkey not registered")
@@ -378,15 +393,15 @@ API: https://s3-auth-api.resilabs.ai
     
     if is_validator:
         print_header("Step 4: Validator Access Test")
-        validator_success = test_validator_access(wallet)
+        validator_success = test_validator_access(wallet, args.wallet, args.hotkey)
         
         print_header("Step 5: Miner Access Test (Validators can also mine)")
-        miner_success = test_miner_access(wallet)
+        miner_success = test_miner_access(wallet, args.wallet, args.hotkey)
         
         overall_success = validator_success or miner_success
     else:
         print_header("Step 4: Miner Access Test")
-        overall_success = test_miner_access(wallet)
+        overall_success = test_miner_access(wallet, args.wallet, args.hotkey)
     
     # Final results
     print_header("Test Results")
