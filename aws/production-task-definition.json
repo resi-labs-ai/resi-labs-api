@@ -1,5 +1,5 @@
 {
-    "family": "subnet46-s3-api",
+    "family": "subnet46-s3-api-task",
     "networkMode": "awsvpc",
     "requiresCompatibilities": ["FARGATE"],
     "cpu": "512",
@@ -8,7 +8,7 @@
     "taskRoleArn": "arn:aws:iam::532533045818:role/ecsTaskRole",
     "containerDefinitions": [
         {
-            "name": "subnet46-api",
+            "name": "api",
             "image": "532533045818.dkr.ecr.us-east-2.amazonaws.com/subnet46-s3-api:latest",
             "portMappings": [
                 {
