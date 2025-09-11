@@ -34,9 +34,9 @@ BT_NETWORK = os.getenv("BT_NETWORK", "finney")
 NET_UID = int(os.getenv('NET_UID', '46'))
 COMMITMENT_VALIDITY_SECONDS = 60
 
-DAILY_LIMIT_PER_MINER = 20
-DAILY_LIMIT_PER_VALIDATOR = 10000
-TOTAL_DAILY_LIMIT = 200000
+DAILY_LIMIT_PER_MINER = int(os.getenv('DAILY_LIMIT_PER_MINER', '20'))
+DAILY_LIMIT_PER_VALIDATOR = int(os.getenv('DAILY_LIMIT_PER_VALIDATOR', '10000'))
+TOTAL_DAILY_LIMIT = int(os.getenv('TOTAL_DAILY_LIMIT', '200000'))
 
 # Timeout configurations
 VALIDATOR_VERIFICATION_TIMEOUT = 120  # 2 minutes
@@ -581,6 +581,41 @@ async def structure_info():
             'signature_verification': f"{SIGNATURE_VERIFICATION_TIMEOUT} seconds",
             's3_operations': f"{S3_OPERATION_TIMEOUT} seconds",
             'description': "All operations have timeout protection to prevent server hanging"
+        }
+    }
+
+
+@app.get("/rate-limits")
+async def get_rate_limits():
+    """Get current rate limiting configuration"""
+    today = time.strftime('%Y-%m-%d')
+    
+    # Get current usage for today
+    global_key = f"GLOBAL:{today}"
+    global_count = redis_client.get_counter(global_key)
+    
+    return {
+        "rate_limits": {
+            "daily_limit_per_miner": DAILY_LIMIT_PER_MINER,
+            "daily_limit_per_validator": DAILY_LIMIT_PER_VALIDATOR,
+            "total_daily_limit": TOTAL_DAILY_LIMIT
+        },
+        "current_usage": {
+            "global_requests_today": global_count,
+            "global_remaining": max(0, TOTAL_DAILY_LIMIT - global_count),
+            "reset_time": "Midnight UTC daily"
+        },
+        "environment": {
+            "network": BT_NETWORK,
+            "subnet_id": NET_UID,
+            "bucket": S3_BUCKET,
+            "region": S3_REGION
+        },
+        "limits_explanation": {
+            "miner_limit": f"Each miner can make {DAILY_LIMIT_PER_MINER} requests per day",
+            "validator_limit": f"Each validator can make {DAILY_LIMIT_PER_VALIDATOR} requests per day", 
+            "total_limit": f"All users combined can make {TOTAL_DAILY_LIMIT} requests per day",
+            "reset_frequency": "Limits reset at midnight UTC every day"
         }
     }
 

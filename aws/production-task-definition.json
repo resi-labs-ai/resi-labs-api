@@ -1,5 +1,5 @@
 {
-    "family": "subnet428-testnet-s3-api",
+    "family": "subnet46-s3-api",
     "networkMode": "awsvpc",
     "requiresCompatibilities": ["FARGATE"],
     "cpu": "512",
@@ -8,8 +8,8 @@
     "taskRoleArn": "arn:aws:iam::532533045818:role/ecsTaskRole",
     "containerDefinitions": [
         {
-            "name": "subnet428-testnet-api",
-            "image": "532533045818.dkr.ecr.us-east-2.amazonaws.com/subnet428-testnet-s3-api:v6",
+            "name": "subnet46-api",
+            "image": "532533045818.dkr.ecr.us-east-2.amazonaws.com/subnet46-s3-api:latest",
             "portMappings": [
                 {
                     "containerPort": 8000,
@@ -19,34 +19,34 @@
             "essential": true,
             "environment": [
                 {"name": "PORT", "value": "8000"},
-                {"name": "S3_BUCKET", "value": "2000-resilabs-test-bittensor-sn428-datacollection"},
+                {"name": "S3_BUCKET", "value": "4000-resilabs-prod-bittensor-sn46-datacollection"},
                 {"name": "S3_REGION", "value": "us-east-2"},
-                {"name": "NET_UID", "value": "428"},
-                {"name": "BT_NETWORK", "value": "test"},
+                {"name": "NET_UID", "value": "46"},
+                {"name": "BT_NETWORK", "value": "finney"},
                 {"name": "SOURCE", "value": "4"},
-                {"name": "DAILY_LIMIT_PER_MINER", "value": "500"},
-                {"name": "DAILY_LIMIT_PER_VALIDATOR", "value": "50000"},
-                {"name": "TOTAL_DAILY_LIMIT", "value": "1000000"},
+                {"name": "DAILY_LIMIT_PER_MINER", "value": "20"},
+                {"name": "DAILY_LIMIT_PER_VALIDATOR", "value": "10000"},
+                {"name": "TOTAL_DAILY_LIMIT", "value": "200000"},
                 {"name": "ENABLE_RATE_LIMITING", "value": "true"},
                 {"name": "RATE_LIMIT_PER_MINUTE", "value": "60"},
                 {"name": "LOG_LEVEL", "value": "INFO"},
-                {"name": "ENVIRONMENT", "value": "testnet"},
+                {"name": "ENVIRONMENT", "value": "production"},
                 {"name": "API_VERSION", "value": "1.0.0"}
             ],
             "secrets": [
                 {
                     "name": "AWS_ACCESS_KEY_ID",
-                    "valueFrom": "arn:aws:secretsmanager:us-east-2:532533045818:secret:subnet428-testnet/aws-credentials:AWS_ACCESS_KEY_ID::"
+                    "valueFrom": "arn:aws:secretsmanager:us-east-2:532533045818:secret:subnet46/aws-credentials:AWS_ACCESS_KEY_ID::"
                 },
                 {
                     "name": "AWS_SECRET_ACCESS_KEY",
-                    "valueFrom": "arn:aws:secretsmanager:us-east-2:532533045818:secret:subnet428-testnet/aws-credentials:AWS_SECRET_ACCESS_KEY::"
+                    "valueFrom": "arn:aws:secretsmanager:us-east-2:532533045818:secret:subnet46/aws-credentials:AWS_SECRET_ACCESS_KEY::"
                 }
             ],
             "logConfiguration": {
                 "logDriver": "awslogs",
                 "options": {
-                    "awslogs-group": "/ecs/subnet428-testnet-s3-api",
+                    "awslogs-group": "/ecs/subnet46-s3-api",
                     "awslogs-region": "us-east-2",
                     "awslogs-stream-prefix": "ecs"
                 }
