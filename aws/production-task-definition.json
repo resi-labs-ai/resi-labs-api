@@ -24,7 +24,7 @@
                 {"name": "NET_UID", "value": "46"},
                 {"name": "BT_NETWORK", "value": "finney"},
                 {"name": "SOURCE", "value": "4"},
-                {"name": "DAILY_LIMIT_PER_MINER", "value": "20"},
+                {"name": "DAILY_LIMIT_PER_MINER", "value": "100"},
                 {"name": "DAILY_LIMIT_PER_VALIDATOR", "value": "10000"},
                 {"name": "TOTAL_DAILY_LIMIT", "value": "200000"},
                 {"name": "ENABLE_RATE_LIMITING", "value": "true"},
