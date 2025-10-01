@@ -1,0 +1,17 @@
+zipcode,state,city,county,population,median_home_value,recently_sold_listings,market_tier,geographic_region,last_scraped
+19102,PA,Philadelphia,Philadelphia County,45230,425000,1250,premium,Mid-Atlantic,2024-03-10
+19103,PA,Philadelphia,Philadelphia County,38920,520000,890,premium,Mid-Atlantic,2024-03-10
+08540,NJ,Princeton,Mercer County,28450,780000,320,premium,Mid-Atlantic,2024-03-12
+07030,NJ,Hoboken,Hudson County,55131,650000,1450,premium,Mid-Atlantic,2024-03-11
+19460,PA,Phoenixville,Chester County,16788,385000,245,standard,Mid-Atlantic,2024-03-09
+08701,NJ,Lakewood,Ocean County,102682,285000,1850,standard,Mid-Atlantic,2024-03-08
+19464,PA,Pottstown,Montgomery County,22377,195000,420,emerging,Mid-Atlantic,2024-03-07
+08360,NJ,Vineland,Cumberland County,60724,165000,680,emerging,Mid-Atlantic,2024-03-06
+19107,PA,Philadelphia,Philadelphia County,42150,445000,1100,premium,Mid-Atlantic,2024-03-10
+08002,NJ,Cherry Hill,Camden County,71045,320000,950,standard,Mid-Atlantic,2024-03-09
+19380,PA,West Chester,Chester County,18461,410000,380,premium,Mid-Atlantic,2024-03-08
+08540,NJ,Princeton Junction,Mercer County,12500,720000,180,premium,Mid-Atlantic,2024-03-12
+19406,PA,King of Prussia,Montgomery County,19936,385000,520,standard,Mid-Atlantic,2024-03-07
+08003,NJ,Cherry Hill,Camden County,65432,295000,780,standard,Mid-Atlantic,2024-03-09
+19335,PA,Downingtown,Chester County,7891,365000,220,standard,Mid-Atlantic,2024-03-06
+08901,NJ,New Brunswick,Middlesex County,55181,285000,890,standard,Mid-Atlantic,2024-03-08

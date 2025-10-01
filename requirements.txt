@@ -10,3 +10,14 @@ bittensor>=9.0.0
 python-dotenv>=1.0.0
 redis>=5.0.0
 async-timeout>=4.0.0
+
+# Database dependencies
+sqlalchemy>=2.0.0
+alembic>=1.12.0
+asyncpg>=0.29.0  # PostgreSQL async driver
+psycopg2-binary>=2.9.0  # PostgreSQL sync driver (backup)
+
+# Testing dependencies
+pytest>=7.0.0
+pytest-asyncio>=0.21.0
+httpx>=0.25.0  # For FastAPI testing

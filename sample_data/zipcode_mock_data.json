@@ -1,0 +1,131 @@
+{
+  "metadata": {
+    "source": "zillow_research_data",
+    "last_updated": "2024-03-15",
+    "total_zipcodes": 2847,
+    "description": "Recently sold listings count per zipcode for PA/NJ region"
+  },
+  "zipcodes": [
+    {
+      "zipcode": "19102",
+      "state": "PA",
+      "city": "Philadelphia", 
+      "county": "Philadelphia County",
+      "population": 45230,
+      "median_home_value": 425000,
+      "recently_sold_listings": 1250,
+      "market_tier": "premium",
+      "geographic_region": "Mid-Atlantic",
+      "last_scraped": "2024-03-10"
+    },
+    {
+      "zipcode": "19103",
+      "state": "PA", 
+      "city": "Philadelphia",
+      "county": "Philadelphia County",
+      "population": 38920,
+      "median_home_value": 520000,
+      "recently_sold_listings": 890,
+      "market_tier": "premium",
+      "geographic_region": "Mid-Atlantic", 
+      "last_scraped": "2024-03-10"
+    },
+    {
+      "zipcode": "08540",
+      "state": "NJ",
+      "city": "Princeton",
+      "county": "Mercer County", 
+      "population": 28450,
+      "median_home_value": 780000,
+      "recently_sold_listings": 320,
+      "market_tier": "premium",
+      "geographic_region": "Mid-Atlantic",
+      "last_scraped": "2024-03-12"
+    },
+    {
+      "zipcode": "07030",
+      "state": "NJ",
+      "city": "Hoboken",
+      "county": "Hudson County",
+      "population": 55131,
+      "median_home_value": 650000, 
+      "recently_sold_listings": 1450,
+      "market_tier": "premium",
+      "geographic_region": "Mid-Atlantic",
+      "last_scraped": "2024-03-11"
+    },
+    {
+      "zipcode": "19460",
+      "state": "PA",
+      "city": "Phoenixville", 
+      "county": "Chester County",
+      "population": 16788,
+      "median_home_value": 385000,
+      "recently_sold_listings": 245,
+      "market_tier": "standard",
+      "geographic_region": "Mid-Atlantic",
+      "last_scraped": "2024-03-09"
+    },
+    {
+      "zipcode": "08701",
+      "state": "NJ", 
+      "city": "Lakewood",
+      "county": "Ocean County",
+      "population": 102682,
+      "median_home_value": 285000,
+      "recently_sold_listings": 1850,
+      "market_tier": "standard", 
+      "geographic_region": "Mid-Atlantic",
+      "last_scraped": "2024-03-08"
+    },
+    {
+      "zipcode": "19464",
+      "state": "PA",
+      "city": "Pottstown",
+      "county": "Montgomery County",
+      "population": 22377,
+      "median_home_value": 195000,
+      "recently_sold_listings": 420,
+      "market_tier": "emerging",
+      "geographic_region": "Mid-Atlantic", 
+      "last_scraped": "2024-03-07"
+    },
+    {
+      "zipcode": "08360",
+      "state": "NJ",
+      "city": "Vineland", 
+      "county": "Cumberland County",
+      "population": 60724,
+      "median_home_value": 165000,
+      "recently_sold_listings": 680,
+      "market_tier": "emerging",
+      "geographic_region": "Mid-Atlantic",
+      "last_scraped": "2024-03-06"
+    }
+  ],
+  "market_tier_definitions": {
+    "premium": {
+      "median_home_value_min": 400000,
+      "description": "High-value markets with strong demand",
+      "selection_weight": 1.5
+    },
+    "standard": {
+      "median_home_value_min": 200000,
+      "median_home_value_max": 399999,
+      "description": "Moderate-value markets with steady activity", 
+      "selection_weight": 1.0
+    },
+    "emerging": {
+      "median_home_value_max": 199999,
+      "description": "Growing markets with potential",
+      "selection_weight": 0.8
+    }
+  },
+  "state_priorities": {
+    "PA": 1,
+    "NJ": 2,
+    "NY": 3,
+    "DE": 4,
+    "MD": 5
+  }
+}

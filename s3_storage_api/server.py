@@ -4,14 +4,17 @@ import json
 import logging
 import asyncio
 from datetime import datetime, timedelta
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Tuple, List
 
 import boto3
 from botocore.config import Config
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.openapi.docs import get_swagger_ui_html
+from fastapi.openapi.utils import get_openapi
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from s3_storage_api.utils.redis_utils import RedisClient
 from s3_storage_api.utils.bt_utils import verify_signature, verify_validator_status
@@ -20,6 +23,10 @@ from s3_storage_api.utils.bt_utils_cached import (
     verify_signature_cached,
     verify_validator_status_cached
 )
+from s3_storage_api.database import get_db, check_database_health, init_database
+from s3_storage_api.services.zipcode_service import ZipcodeService
+from s3_storage_api.services.epoch_manager import EpochManager
+from s3_storage_api.services.validator_s3_service import ValidatorS3Service
 import bittensor as bt
 
 load_dotenv()
@@ -51,9 +58,9 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(
-    title="S3 Auth Server for Subnet 46 - Resi Labs",
-    description="Authentication server for S3 storage with 2-minute timeout protection for Bittensor Subnet 46",
-    version="1.0.0",
+    title="Resi Labs API - Subnet 46",
+    description="S3 Authentication and Zipcode Assignment API for Bittensor Subnet 46",
+    version="2.0.0",
 )
 
 app.add_middleware(
@@ -65,6 +72,89 @@ app.add_middleware(
 )
 
 redis_client = RedisClient()
+
+# Custom OpenAPI configuration
+def custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+    
+    openapi_schema = get_openapi(
+        title="Resi Labs API - Subnet 46",
+        version="2.0.0",
+        description="""
+# Resi Labs API for Bittensor Subnet 46
+
+This API provides two main services:
+
+## 🔐 S3 Authentication Service
+- **Miners**: Get S3 upload credentials for real estate data
+- **Validators**: Get read access to miner data for validation
+
+## 🗺️ Zipcode Assignment Service  
+- **Competitive Mining**: 4-hour epochs with zipcode assignments
+- **Anti-Gaming**: Nonce-based security and honeypot detection
+- **Validator Uploads**: S3 access for storing winning validation results
+
+## Authentication
+All endpoints require bittensor hotkey signatures:
+1. Create commitment string (format specified per endpoint)
+2. Sign with your hotkey: `signature = hotkey.sign(commitment.encode()).hex()`
+3. Include signature in request
+
+## Rate Limiting
+- **Miners**: 10 zipcode requests/minute, 20 S3 requests/day
+- **Validators**: 20 historical requests/hour, 5 S3 uploads/hour
+- **Public**: 30 stats requests/minute
+
+## Epochs
+- **Duration**: 4 hours (00:00, 04:00, 08:00, 12:00, 16:00, 20:00 UTC)
+- **Target**: 10,000 ±10% listings per epoch
+- **States**: PA, NJ prioritized (configurable)
+        """,
+        routes=app.routes,
+        tags=[
+            {
+                "name": "Zipcode Assignments",
+                "description": "Get zipcode assignments for competitive mining"
+            },
+            {
+                "name": "Validator S3 Access", 
+                "description": "S3 upload access for validators to store results"
+            },
+            {
+                "name": "S3 Authentication",
+                "description": "Original S3 authentication for miners and validators"
+            },
+            {
+                "name": "System Health",
+                "description": "Health checks and system statistics"
+            }
+        ]
+    )
+    
+    # Add security scheme
+    openapi_schema["components"]["securitySchemes"] = {
+        "BittensorSignature": {
+            "type": "apiKey",
+            "in": "header", 
+            "name": "Authorization",
+            "description": "Bittensor hotkey signature. Format: Bearer {signature_hex}"
+        }
+    }
+    
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
+
+app.openapi = custom_openapi
+
+# Custom Swagger UI
+@app.get("/docs", include_in_schema=False)
+async def custom_swagger_ui_html():
+    return get_swagger_ui_html(
+        openapi_url="/openapi.json",
+        title="Resi Labs API Documentation",
+        swagger_favicon_url="https://fastapi.tiangolo.com/img/favicon.png"
+    )
 
 # Initialize MetagraphSyncer for cached blockchain queries
 logger.info("Initializing MetagraphSyncer...")
@@ -93,6 +183,39 @@ s3_client = boto3.client(
     )
 )
 
+# Initialize zipcode assignment services
+zipcode_service = ZipcodeService()
+epoch_manager = EpochManager(zipcode_service)
+validator_s3_service = ValidatorS3Service()
+
+# Initialize database on startup
+@app.on_event("startup")
+async def startup_event():
+    """Initialize database and start background tasks"""
+    try:
+        await init_database()
+        logger.info("Database initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize database: {str(e)}")
+        # Don't fail startup - allow API to run without zipcode features
+    
+    # Start background epoch management
+    try:
+        from s3_storage_api.database import AsyncSessionLocal
+        await epoch_manager.start_background_management(AsyncSessionLocal)
+        logger.info("Background epoch management started")
+    except Exception as e:
+        logger.error(f"Failed to start background epoch management: {str(e)}")
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Clean shutdown"""
+    try:
+        await epoch_manager.stop_background_management()
+        logger.info("Background tasks stopped")
+    except Exception as e:
+        logger.error(f"Error during shutdown: {str(e)}")
+
 
 class MinerFolderAccessRequest(BaseModel):
     coldkey: str
@@ -108,6 +231,33 @@ class ValidatorAccessRequest(BaseModel):
     timestamp: int = Field(default_factory=lambda: int(time.time()))
     expiry: Optional[int] = None
     miner_hotkey: Optional[str] = None
+
+# New Pydantic models for zipcode endpoints
+class ZipcodeAssignmentRequest(BaseModel):
+    hotkey: str
+    signature: str  # HEX string
+    timestamp: int = Field(default_factory=lambda: int(time.time()))
+
+class ValidatorS3UploadRequest(BaseModel):
+    hotkey: str
+    signature: str  # HEX string
+    timestamp: int = Field(default_factory=lambda: int(time.time()))
+    purpose: str = "epoch_validation_results"
+    epoch_id: str
+    estimated_data_size_mb: Optional[int] = 25
+    retention_days: Optional[int] = 90
+
+class MinerStatusRequest(BaseModel):
+    hotkey: str
+    signature: str  # HEX string
+    timestamp: int = Field(default_factory=lambda: int(time.time()))
+    epoch_id: str
+    nonce: str
+    status: str  # "in_progress", "completed", "failed"
+    listings_scraped: Optional[int] = None
+    zipcodes_completed: Optional[List[dict]] = None
+    s3_upload_complete: Optional[bool] = False
+    s3_upload_timestamp: Optional[str] = None
 
 
 # Lightweight monitoring - just counters
@@ -284,7 +434,342 @@ def generate_validator_access_urls(validator_hotkey: str, expiry_hours: int = 24
     }
 
 
-@app.post("/get-folder-access")
+# ============================================================================
+# NEW ZIPCODE ASSIGNMENT ENDPOINTS
+# ============================================================================
+
+@app.get("/api/v1/zipcode-assignments/current", tags=["Zipcode Assignments"])
+async def get_current_zipcode_assignment(
+    hotkey: str,
+    signature: str,
+    timestamp: int,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get current zipcode assignments for miners.
+    
+    **Authentication**: Requires valid bittensor hotkey signature
+    **Rate Limit**: 10 requests per minute per hotkey
+    **Commitment Format**: `zipcode:assignment:current:{timestamp}`
+    """
+    try:
+        # Basic timestamp validation
+        now = int(time.time())
+        if abs(now - timestamp) > 300:  # 5 minutes tolerance
+            raise HTTPException(status_code=400, detail="Invalid timestamp")
+        
+        # Light rate limiting - 10 requests per minute per hotkey
+        rate_limit_key = f"zipcode_current:{hotkey}"
+        current_count = redis_client.get_counter(rate_limit_key)
+        if current_count >= 10:
+            raise HTTPException(status_code=429, detail="Rate limit exceeded: 10 requests per minute")
+        redis_client.increment_counter(rate_limit_key, expire=60)
+        
+        # Verify signature (miners need to be registered)
+        commitment = f"zipcode:assignment:current:{timestamp}"
+        signature_valid = await verify_signature_with_timeout(commitment, signature, hotkey, NET_UID, BT_NETWORK)
+        if not signature_valid:
+            logger.warning(f"ZIPCODE ASSIGNMENT - Invalid signature: {hotkey}")
+            raise HTTPException(status_code=401, detail="Invalid signature")
+        
+        # Get current epoch
+        current_epoch = await epoch_manager.get_current_epoch(db)
+        if not current_epoch:
+            raise HTTPException(status_code=404, detail="No current epoch available")
+        
+        # Build response
+        zipcodes_data = []
+        for assignment in current_epoch.assignments:
+            zipcodes_data.append({
+                "zipcode": assignment.zipcode,
+                "expected_listings": assignment.expected_listings,
+                "state": assignment.state,
+                "city": assignment.city,
+                "county": assignment.county,
+                "market_tier": assignment.market_tier,
+                "geographic_region": assignment.geographic_region
+            })
+        
+        return {
+            "success": True,
+            "epoch_id": current_epoch.id,
+            "epoch_start": current_epoch.start_time.isoformat(),
+            "epoch_end": current_epoch.end_time.isoformat(),
+            "nonce": current_epoch.nonce,
+            "target_listings": current_epoch.target_listings,
+            "tolerance_percent": current_epoch.tolerance_percent,
+            "submission_deadline": current_epoch.end_time.isoformat(),
+            "zipcodes": zipcodes_data,
+            "metadata": {
+                "total_expected_listings": current_epoch.total_expected_listings,
+                "zipcode_count": len(zipcodes_data),
+                "algorithm_version": current_epoch.algorithm_version,
+                "selection_seed": current_epoch.selection_seed
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in get_current_zipcode_assignment: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@app.get("/api/v1/zipcode-assignments/epoch/{epoch_id}", tags=["Zipcode Assignments"])
+async def get_historical_epoch(
+    epoch_id: str,
+    hotkey: str,
+    signature: str,
+    timestamp: int,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get historical epoch assignments for validators.
+    
+    **Authentication**: Requires validator status + signature
+    **Rate Limit**: 20 requests per hour per validator
+    **Commitment Format**: `zipcode:validation:{epoch_id}:{timestamp}`
+    """
+    try:
+        # Basic timestamp validation
+        now = int(time.time())
+        if abs(now - timestamp) > 300:
+            raise HTTPException(status_code=400, detail="Invalid timestamp")
+        
+        # Verify validator status
+        validator_status = await verify_validator_status_with_timeout(hotkey, NET_UID, BT_NETWORK)
+        if not validator_status:
+            logger.warning(f"HISTORICAL EPOCH ACCESS DENIED: {hotkey} - not a validator")
+            raise HTTPException(status_code=403, detail="Validator status required")
+        
+        # Verify signature
+        commitment = f"zipcode:validation:{epoch_id}:{timestamp}"
+        signature_valid = await verify_signature_with_timeout(commitment, signature, hotkey, NET_UID, BT_NETWORK)
+        if not signature_valid:
+            logger.warning(f"HISTORICAL EPOCH - Invalid signature: {hotkey}")
+            raise HTTPException(status_code=401, detail="Invalid signature")
+        
+        # Rate limiting for validators - 20 requests per hour
+        rate_limit_key = f"zipcode_historical:{hotkey}:{time.strftime('%Y-%m-%d-%H')}"
+        current_count = redis_client.get_counter(rate_limit_key)
+        if current_count >= 20:
+            raise HTTPException(status_code=429, detail="Rate limit exceeded: 20 requests per hour")
+        redis_client.increment_counter(rate_limit_key, expire=3600)
+        
+        # Get historical epoch
+        epoch = await epoch_manager.get_epoch_by_id(db, epoch_id)
+        if not epoch:
+            raise HTTPException(status_code=404, detail=f"Epoch {epoch_id} not found")
+        
+        # Build response (same format as current)
+        zipcodes_data = []
+        for assignment in epoch.assignments:
+            zipcodes_data.append({
+                "zipcode": assignment.zipcode,
+                "expected_listings": assignment.expected_listings,
+                "state": assignment.state,
+                "city": assignment.city,
+                "county": assignment.county,
+                "market_tier": assignment.market_tier,
+                "geographic_region": assignment.geographic_region
+            })
+        
+        return {
+            "success": True,
+            "epoch_id": epoch.id,
+            "epoch_start": epoch.start_time.isoformat(),
+            "epoch_end": epoch.end_time.isoformat(),
+            "nonce": epoch.nonce,
+            "target_listings": epoch.target_listings,
+            "tolerance_percent": epoch.tolerance_percent,
+            "status": epoch.status,
+            "zipcodes": zipcodes_data,
+            "metadata": {
+                "total_expected_listings": epoch.total_expected_listings,
+                "zipcode_count": len(zipcodes_data),
+                "algorithm_version": epoch.algorithm_version,
+                "selection_seed": epoch.selection_seed
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in get_historical_epoch: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@app.post("/api/v1/s3-access/validator-upload", tags=["Validator S3 Access"])
+async def get_validator_s3_upload_access(request: ValidatorS3UploadRequest):
+    """
+    Provide S3 upload access for validators to store winning data.
+    
+    **Authentication**: Requires validator status + signature
+    **Rate Limit**: 5 requests per hour per validator
+    **Commitment Format**: `s3:validator:upload:{timestamp}`
+    """
+    try:
+        hotkey, timestamp = request.hotkey, request.timestamp
+        signature = request.signature
+        epoch_id = request.epoch_id
+        
+        # Basic timestamp validation
+        now = int(time.time())
+        if abs(now - timestamp) > 300:
+            raise HTTPException(status_code=400, detail="Invalid timestamp")
+        
+        # Verify validator status
+        validator_status = await verify_validator_status_with_timeout(hotkey, NET_UID, BT_NETWORK)
+        if not validator_status:
+            logger.warning(f"VALIDATOR S3 ACCESS DENIED: {hotkey} - not a validator")
+            raise HTTPException(status_code=403, detail="Validator status required")
+        
+        # Verify signature
+        commitment = f"s3:validator:upload:{timestamp}"
+        signature_valid = await verify_signature_with_timeout(commitment, signature, hotkey, NET_UID, BT_NETWORK)
+        if not signature_valid:
+            logger.warning(f"VALIDATOR S3 UPLOAD - Invalid signature: {hotkey}")
+            raise HTTPException(status_code=401, detail="Invalid signature")
+        
+        # Rate limiting - 5 requests per hour per validator
+        rate_limit_key = f"validator_s3:{hotkey}:{time.strftime('%Y-%m-%d-%H')}"
+        current_count = redis_client.get_counter(rate_limit_key)
+        if current_count >= 5:
+            raise HTTPException(status_code=429, detail="Rate limit exceeded: 5 S3 access requests per hour")
+        redis_client.increment_counter(rate_limit_key, expire=3600)
+        
+        # Generate S3 credentials
+        s3_response = await validator_s3_service.generate_temporary_credentials(
+            validator_hotkey=hotkey,
+            epoch_id=epoch_id,
+            purpose=request.purpose
+        )
+        
+        if not s3_response or not s3_response.get("success"):
+            error_msg = s3_response.get("message", "Failed to generate S3 credentials") if s3_response else "S3 service unavailable"
+            raise HTTPException(status_code=500, detail=error_msg)
+        
+        return s3_response
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in get_validator_s3_upload_access: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@app.get("/api/v1/zipcode-assignments/stats", tags=["System Health"])
+async def get_zipcode_statistics(db: AsyncSession = Depends(get_db)):
+    """
+    Get system statistics and health metrics.
+    
+    **Authentication**: None required (public endpoint)
+    **Rate Limit**: 30 requests per minute globally
+    """
+    try:
+        # Light rate limiting by IP
+        client_ip = "global"  # Could get from request.client.host
+        rate_limit_key = f"stats:{client_ip}:{time.strftime('%Y-%m-%d-%H-%M')}"
+        current_count = redis_client.get_counter(rate_limit_key)
+        if current_count >= 30:  # 30 requests per minute globally
+            raise HTTPException(status_code=429, detail="Rate limit exceeded")
+        redis_client.increment_counter(rate_limit_key, expire=60)
+        
+        # Get current epoch status
+        epoch_status = await epoch_manager.get_epoch_status_summary(db)
+        
+        # Get zipcode statistics
+        zipcode_stats = await zipcode_service.get_zipcode_statistics(db)
+        
+        # Get recent epochs
+        recent_epochs = await epoch_manager.get_recent_epochs(db, limit=5)
+        
+        return {
+            "success": True,
+            "current_time": datetime.utcnow().isoformat(),
+            "system_status": "operational",
+            "epoch_status": epoch_status,
+            "zipcode_statistics": zipcode_stats,
+            "recent_performance": [
+                {
+                    "epoch_id": epoch.id,
+                    "status": epoch.status,
+                    "zipcodes_assigned": len(epoch.assignments),
+                    "target_listings": epoch.target_listings,
+                    "actual_expected": sum(a.expected_listings for a in epoch.assignments)
+                }
+                for epoch in recent_epochs
+            ]
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in get_zipcode_statistics: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@app.post("/api/v1/zipcode-assignments/status", tags=["Zipcode Assignments"])
+async def submit_completion_status(request: MinerStatusRequest, db: AsyncSession = Depends(get_db)):
+    """
+    Optional endpoint for miners to report completion status.
+    
+    **Authentication**: Requires miner signature + valid nonce
+    **Rate Limit**: 10 status updates per hour per miner
+    **Commitment Format**: `zipcode:status:{epoch_id}:{timestamp}`
+    """
+    try:
+        hotkey, timestamp = request.hotkey, request.timestamp
+        signature = request.signature
+        epoch_id = request.epoch_id
+        
+        # Basic timestamp validation
+        now = int(time.time())
+        if abs(now - timestamp) > 300:
+            raise HTTPException(status_code=400, detail="Invalid timestamp")
+        
+        # Verify signature
+        commitment = f"zipcode:status:{epoch_id}:{timestamp}"
+        signature_valid = await verify_signature_with_timeout(commitment, signature, hotkey, NET_UID, BT_NETWORK)
+        if not signature_valid:
+            logger.warning(f"MINER STATUS - Invalid signature: {hotkey}")
+            raise HTTPException(status_code=401, detail="Invalid signature")
+        
+        # Rate limiting - 10 status updates per hour per miner
+        rate_limit_key = f"miner_status:{hotkey}:{time.strftime('%Y-%m-%d-%H')}"
+        current_count = redis_client.get_counter(rate_limit_key)
+        if current_count >= 10:
+            raise HTTPException(status_code=429, detail="Rate limit exceeded: 10 status updates per hour")
+        redis_client.increment_counter(rate_limit_key, expire=3600)
+        
+        # Verify epoch exists and nonce matches
+        epoch = await epoch_manager.get_epoch_by_id(db, epoch_id)
+        if not epoch:
+            raise HTTPException(status_code=404, detail=f"Epoch {epoch_id} not found")
+        
+        if epoch.nonce != request.nonce:
+            raise HTTPException(status_code=400, detail="Invalid nonce for epoch")
+        
+        # Store status update (optional - for monitoring)
+        # This could be stored in MinerSubmission table if needed
+        
+        logger.info(f"Miner status update: {hotkey} - {epoch_id} - {request.status}")
+        
+        return {
+            "success": True,
+            "message": "Status update received",
+            "epoch_id": epoch_id,
+            "status": request.status,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in submit_completion_status: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+# ============================================================================
+# EXISTING S3 AUTHENTICATION ENDPOINTS
+# ============================================================================
+
+@app.post("/get-folder-access", tags=["S3 Authentication"])
 async def get_folder_access(request: MinerFolderAccessRequest):
     try:
         coldkey, hotkey = request.coldkey, request.hotkey
@@ -337,7 +822,7 @@ async def get_folder_access(request: MinerFolderAccessRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/get-validator-access")
+@app.post("/get-validator-access", tags=["S3 Authentication"])
 async def get_validator_access(request: ValidatorAccessRequest):
     try:
         hotkey, timestamp = request.hotkey, request.timestamp
@@ -449,7 +934,7 @@ async def get_miner_specific_access(request: ValidatorAccessRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/healthcheck")
+@app.get("/healthcheck", tags=["System Health"])
 async def health_check():
     # Quick S3 test with timeout
     s3_ok = True
@@ -478,6 +963,12 @@ async def health_check():
         redis_ok = False
         logger.error(f"Redis health check failed: {str(e)}")
 
+    # Database health check
+    db_ok = await check_database_health()
+
+    # Validator S3 service health check
+    validator_s3_health = await validator_s3_service.get_service_health()
+
     stats = monitor.get_stats()
 
     # Check metagraph syncer status
@@ -505,16 +996,43 @@ async def health_check():
             'reason': 'Initialization failed, using fallback methods'
         }
 
+    # Overall system status
+    critical_services_ok = s3_ok and redis_ok and metagraph_ok
+    zipcode_services_ok = db_ok and validator_s3_health.get('validator_s3_service') != 'unhealthy'
+    
+    if critical_services_ok and zipcode_services_ok:
+        overall_status = 'healthy'
+    elif critical_services_ok:
+        overall_status = 'degraded'  # Core S3 auth works, zipcode features may be limited
+    else:
+        overall_status = 'unhealthy'
+
     return {
-        'status': 'ok' if s3_ok and redis_ok else 'degraded',
+        'status': overall_status,
         'timestamp': time.time(),
-        'bucket': S3_BUCKET,
-        'region': S3_REGION,
+        'services': {
+            's3_auth': {
+                'status': 'ok' if s3_ok else 'error',
+                'bucket': S3_BUCKET,
+                'region': S3_REGION,
+                'latency_ms': round(s3_latency * 1000, 2)
+            },
+            'redis': {
+                'status': 'ok' if redis_ok else 'error'
+            },
+            'database': {
+                'status': 'ok' if db_ok else 'error'
+            },
+            'validator_s3': validator_s3_health,
+            'metagraph_syncer': metagraph_info
+        },
+        'features': {
+            's3_authentication': s3_ok and redis_ok,
+            'zipcode_assignments': db_ok,
+            'validator_uploads': validator_s3_health.get('validator_s3_service') == 'healthy',
+            'background_epoch_management': db_ok
+        },
         'folder_structure': 'data/hotkey={hotkey_id}/job_id={job_id}/',
-        's3_ok': s3_ok,
-        's3_latency_ms': round(s3_latency * 1000, 2),
-        'redis_ok': redis_ok,
-        'metagraph_syncer': metagraph_info,
         'stats': stats,
         'timeouts': {
             'validator_verification': f"{VALIDATOR_VERIFICATION_TIMEOUT}s",
